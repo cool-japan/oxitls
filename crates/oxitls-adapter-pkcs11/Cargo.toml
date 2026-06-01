@@ -1,0 +1,45 @@
+[package]
+name = "oxitls-adapter-pkcs11"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "OxiTLS adapter: PKCS#11 HSM/TPM backed rustls SigningKey via cryptoki"
+categories = ["cryptography", "network-programming"]
+keywords = ["tls", "rustls", "pkcs11", "hsm", "cooljapan"]
+
+[features]
+default = []
+# Enables the PKCS#11 signer via the cryptoki crate.
+# This feature-gates the HSM/TPM bridge — the default closure remains Pure Rust.
+pkcs11 = [
+    "dep:cryptoki",
+    "dep:secrecy",
+    "dep:parking_lot",
+    "dep:tokio",
+]
+
+[dependencies]
+oxitls-core = { workspace = true }
+rustls = { workspace = true }
+cryptoki = { workspace = true, optional = true }
+secrecy = { workspace = true, optional = true }
+parking_lot = { workspace = true, optional = true }
+tokio = { workspace = true, optional = true }
+
+[dev-dependencies]
+rustls-rustcrypto = { workspace = true }
+criterion = { workspace = true }
+tokio = { workspace = true }
+cryptoki = { workspace = true }
+p256 = { workspace = true, features = ["ecdsa"] }
+
+[[bench]]
+name = "pkcs11_bench"
+harness = false
+
+[[bench]]
+name = "pkcs11_perf"
+harness = false

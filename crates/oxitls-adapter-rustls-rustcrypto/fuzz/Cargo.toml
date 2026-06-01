@@ -1,0 +1,18 @@
+[package]
+name = "oxitls-adapter-rustls-rustcrypto-fuzz"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+rustls-pemfile = "2.2"
+
+[[bin]]
+name = "client_config_parser"
+path = "fuzz_targets/client_config_parser.rs"
+test = false
+doc = false

@@ -1,0 +1,82 @@
+[package]
+name = "oxitls-adapter-rustls-rustcrypto"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "OxiTLS adapter: rustls + RustCrypto CryptoProvider (pure Rust TLS)"
+categories = ["cryptography", "network-programming"]
+keywords = ["tls", "rustls", "rustcrypto", "pure-rust", "cooljapan"]
+
+[features]
+# Namespace reservation for post-quantum key exchange (X25519MLKEM768).
+# Full wiring is deferred to Wave 6 pending rustls KX-group API stabilisation.
+post-quantum = ["dep:ml-kem", "dep:x25519-dalek"]
+
+[dependencies]
+oxitls-core = { workspace = true }
+oxitls-webpki-roots = { workspace = true }
+rustls = { workspace = true, features = ["std", "logging"] }
+rustls-pemfile = { workspace = true }
+rustls-rustcrypto = { workspace = true }
+rustls-pki-types = { workspace = true }
+tokio-rustls = { workspace = true, features = ["early-data"] }
+tokio = { workspace = true }
+p256 = { workspace = true }
+p384 = { workspace = true }
+ed25519-dalek = { workspace = true, features = ["alloc"] }
+rsa = { workspace = true }
+sha2 = { version = "0.11", default-features = false, features = ["oid"] }
+signature = { workspace = true }
+x509-ocsp = { workspace = true }
+der = { workspace = true }
+spki = { workspace = true }
+tracing = { workspace = true }
+x509-parser = { workspace = true }
+x509-cert = { workspace = true }
+ml-kem = { workspace = true, optional = true }
+x25519-dalek = { workspace = true, optional = true }
+# NOTE: rand_core/rand are intentionally NOT direct deps of this crate. The
+# getrandom-backed `oxitls_core::OsRng` (rand_core 0.6) feeds x25519-dalek's
+# `EphemeralSecret::random_from_rng`; ml-kem's keygen takes no RNG argument.
+getrandom = { workspace = true }
+
+[dev-dependencies]
+rcgen = { workspace = true, features = ["crypto", "pem", "ring"] }
+tokio = { workspace = true, features = ["full", "macros"] }
+oxitls-webpki-roots = { workspace = true }
+sha2 = { version = "0.11", default-features = false, features = ["oid"] }
+# temporarily removed for publish (circular/forward dev-dep); restore after publish complete
+# oxitls-rcgen = { workspace = true }
+criterion = { workspace = true }
+p256 = { workspace = true }
+rsa = { workspace = true }
+x509-ocsp = { workspace = true, features = ["builder"] }
+x509-cert = { workspace = true }
+der = { workspace = true }
+
+[[bench]]
+name = "builder"
+harness = false
+
+[[bench]]
+name = "cert_pin_lookup"
+harness = false
+
+[[bench]]
+name = "handshake_full_vs_resumed"
+harness = false
+
+[[bench]]
+name = "crl_check"
+harness = false
+
+[[bench]]
+name = "deep_chain_validation"
+harness = false
+
+[[bench]]
+name = "memory"
+harness = false

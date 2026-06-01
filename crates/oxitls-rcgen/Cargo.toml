@@ -1,0 +1,53 @@
+[package]
+name = "oxitls-rcgen"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "Pure-Rust certificate generation for OxiTLS — rcgen bridge backed by OxiCrypto signing keys (Ed25519, ECDSA-P256), zero ring/aws-lc-rs"
+categories = ["cryptography", "network-programming"]
+keywords = ["tls", "rcgen", "certificates", "pure-rust", "cooljapan"]
+
+[dependencies]
+rcgen         = { workspace = true }
+ed25519-dalek = { workspace = true }
+p256          = { workspace = true }
+p384          = { workspace = true }
+rsa           = { workspace = true }
+rand          = { workspace = true }
+getrandom     = { workspace = true }
+oxitls-core   = { workspace = true }
+oxitls-adapter-rustls-rustcrypto = { workspace = true }
+rustls        = { workspace = true }
+rustls-pki-types = { workspace = true }
+x509-parser   = { workspace = true }
+p12           = { workspace = true }
+time          = { workspace = true }
+# SHA-256 for SubjectKeyIdentifier computation (same major as p256's sha2)
+sha2          = { version = "0.11", default-features = false, features = ["alloc"] }
+
+[[bench]]
+name    = "cert_gen"
+harness = false
+
+[[bench]]
+name    = "chain_build"
+harness = false
+
+[[bench]]
+name    = "pkcs12"
+harness = false
+
+[dev-dependencies]
+criterion    = { workspace = true }
+# Tests wire the generated cert straight into a rustls handshake
+oxitls-adapter-rustls-rustcrypto = { workspace = true }
+rustls       = { workspace = true }
+rustls-pki-types = { workspace = true }
+tokio        = { workspace = true, features = ["full", "macros"] }
+tokio-rustls = { workspace = true }
+x509-parser  = { workspace = true }
+p12          = { workspace = true }
+time         = { workspace = true }

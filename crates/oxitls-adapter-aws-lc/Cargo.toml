@@ -1,0 +1,60 @@
+[package]
+name = "oxitls-adapter-aws-lc"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "OxiTLS adapter: aws-lc-rs backed rustls CryptoProvider"
+categories = ["cryptography", "network-programming"]
+keywords = ["tls", "rustls", "aws-lc-rs", "cooljapan", "oxitls"]
+
+[features]
+default = []
+# Enables the aws-lc-rs CryptoProvider via rustls's built-in aws_lc_rs feature.
+# This feature-gates C/FFI code — the default closure remains Pure Rust.
+aws-lc = ["rustls/aws_lc_rs", "dep:aws-lc-rs"]
+# Marker feature documenting future oxicrypto coexistence integration.
+# Empirically verified 2026-05-29: both crates share aws-lc-rs 1.17.0 without symbol conflicts.
+# Blocked from permanent dev-dep: oxicrypto is an unpublished workspace (v0.0.0, no registry
+# release). Add the dep once oxicrypto publishes a registry version.
+oxicrypto-coexist = []
+
+[dependencies]
+oxitls-core = { workspace = true }
+rustls = { workspace = true }
+rustls-pki-types = { workspace = true }
+tokio = { workspace = true, features = ["rt", "time", "sync"] }
+aws-lc-rs = { workspace = true, optional = true }
+
+[[bench]]
+name    = "handshake"
+harness = false
+
+[[bench]]
+name    = "provider_construction"
+harness = false
+
+[[bench]]
+name    = "throughput"
+harness = false
+
+[dev-dependencies]
+criterion    = { workspace = true }
+rcgen        = { workspace = true, features = ["crypto", "pem", "ring"] }
+rustls       = { workspace = true }
+rustls-pki-types = { workspace = true }
+tokio        = { workspace = true, features = ["full", "macros", "test-util"] }
+tokio-rustls = { workspace = true }
+# temporarily removed for publish (circular/forward dev-dep); restore after publish complete
+# oxitls-adapter-rustls-rustcrypto = { workspace = true }
+# oxitls-rcgen = { workspace = true }
+aws-lc-rs    = { workspace = true }
+p256         = { workspace = true }
+# wave9 HTTPS integration test: oxihttp server + raw hyper client, both aws-lc-rs backed
+# oxihttp-server = { path = "../../../oxihttp/crates/oxihttp-server", features = ["tls"] }  # temporarily removed for publish (cross-workspace path dep; oxihttp published after oxitls); restore after publish complete
+# hyper          = { workspace = true }  # temporarily removed (needed only for oxihttp-server integration test)
+# hyper-util     = { workspace = true }  # temporarily removed
+# http-body-util = { workspace = true }  # temporarily removed
+# bytes          = { workspace = true }  # temporarily removed

@@ -1,0 +1,14 @@
+[profile.default]
+# RSA key generation (2048-bit and 4096-bit) is computationally intensive in
+# Pure Rust (no C acceleration). OCSP tests also generate RSA keys internally.
+# These tests are slow by design — give them up to 600 seconds.
+slow-timeout = { period = "60s", terminate-after = 3 }
+
+[[profile.default.overrides]]
+# RSA-2048 / RSA-4096 loopback and chain tests that involve key generation.
+# Pure-Rust RSA (no C/asm acceleration) is significantly slower than
+# ring/aws-lc-rs on the same hardware. RSA-2048 keygen takes ~120s and RSA-4096
+# can take 10-20x longer. Give them a generous 1800s (30 min) deadline.
+filter = 'test(rsa2048) | test(rsa4096) | test(intermediate_chain) | test(ocsp_signature_valid_rsa) | test(ocsp_signature_invalid) | test(ocsp_unknown_status)'
+slow-timeout = { period = "120s", terminate-after = 15 }
+timeout = "1800s"

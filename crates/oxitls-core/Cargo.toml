@@ -1,0 +1,33 @@
+[package]
+name = "oxitls-core"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "Core traits and types for OxiTLS"
+categories = ["cryptography", "network-programming"]
+keywords = ["tls", "rustls", "pure-rust", "cooljapan", "oxitls"]
+
+[dependencies]
+tokio = { workspace = true }
+rustls = { workspace = true }
+# rand_core 0.6 (declared directly, NOT `workspace = true`): the getrandom-
+# backed `OsRng` adapter in `src/os_rng.rs` must implement the *0.6* traits
+# that `rsa`/`ed25519-dalek`/`x25519-dalek` require, while the workspace
+# `rand`/`rand_core` are 0.10. This is the same documented kind of exception
+# as `sha2` needing two majors.
+rand_core = { version = "0.6", default-features = false }
+getrandom = { workspace = true }
+
+[features]
+generic-transport = []
+
+[dev-dependencies]
+criterion = { workspace = true }
+tokio = { workspace = true }
+
+[[bench]]
+name = "core_ops"
+harness = false

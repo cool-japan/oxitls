@@ -1,0 +1,165 @@
+[package]
+name        = "oxitls-bench"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "OxiTLS benchmarks — handshake throughput and AEAD primitives vs ring/aws-lc-rs"
+publish     = false
+
+[[bench]]
+name    = "handshake"
+harness = false
+
+[[bench]]
+name    = "tls12_handshake"
+harness = false
+
+[[bench]]
+name    = "aead"
+harness = false
+
+[[bench]]
+name    = "throughput"
+harness = false
+
+[[bench]]
+name    = "sig"
+harness = false
+
+[[bench]]
+name    = "cert_gen"
+harness = false
+
+[[bench]]
+name    = "mtls"
+harness = false
+
+[[bench]]
+name    = "alpn_sni"
+harness = false
+
+[[bench]]
+name    = "oxiticketer_encrypt"
+harness = false
+
+[[bench]]
+name    = "oxiticketer_rotation"
+harness = false
+
+[[bench]]
+name    = "h2_over_tls"
+harness = false
+
+[[bench]]
+name    = "connection_pool"
+harness = false
+
+[[bench]]
+name    = "tls12_handshake_resumed"
+harness = false
+
+[[bench]]
+name    = "early_data"
+harness = false
+
+[[bench]]
+name    = "keying_material_export"
+harness = false
+
+[[bench]]
+name    = "builder_construction"
+harness = false
+
+[[bench]]
+name    = "ocsp_resolver_dispatch"
+harness = false
+
+[[bench]]
+name    = "ocsp_stapling_overhead"
+harness = false
+
+[[bench]]
+name    = "connection_info_extract"
+harness = false
+
+[[bench]]
+name    = "ticketer_rotation_contention"
+harness = false
+
+[[bench]]
+name    = "connector_cold_start"
+harness = false
+
+[[bench]]
+name    = "aead_per_suite"
+harness = false
+
+[[bench]]
+name    = "digest"
+harness = false
+
+[[bench]]
+name    = "zero_rtt_handshake"
+harness = false
+
+[[bench]]
+name    = "h2_tls_throughput"
+harness = false
+
+[[bench]]
+name    = "allocations"
+harness = false
+
+[[bench]]
+name    = "http_latency"
+harness = false
+
+[features]
+# Optional: heap profiling via dhat (writes dhat-heap.json).
+dhat-heap = ["dep:dhat"]
+# Optional: HDR histogram output alongside criterion HTML for latency percentiles.
+latency-histogram = ["dep:hdrhistogram"]
+
+[dependencies]
+oxitls                           = { workspace = true, features = ["pure", "rcgen", "webpki-roots"] }
+oxitls-rcgen                     = { workspace = true }
+oxitls-adapter-rustls-rustcrypto = { workspace = true }
+oxitls-webpki-roots              = { workspace = true }
+oxitls-h2                        = { workspace = true }
+tokio                            = { workspace = true, features = ["rt-multi-thread", "macros"] }
+rustls                           = { workspace = true }
+rustls-pki-types                 = { workspace = true }
+tokio-rustls                     = { workspace = true }
+bytes                            = { workspace = true }
+http                             = { workspace = true }
+# Pure-Rust AES-256-GCM (same backend as OxiTicketer) — for the OxiTLS side of
+# the AEAD comparison.  This is a direct dep of oxitls (via "pure" feature) so
+# we can share the same algorithm surface.
+aes-gcm                          = { workspace = true }
+# Optional: heap profiling via dhat
+dhat                             = { workspace = true, optional = true }
+# Optional: HDR histogram for latency percentile output
+hdrhistogram                     = { workspace = true, optional = true }
+
+[dev-dependencies]
+criterion                        = { workspace = true }
+chacha20poly1305                 = { workspace = true }
+ed25519-dalek                    = { workspace = true }
+p256                             = { workspace = true }
+p384                             = { workspace = true }
+rsa                              = { workspace = true }
+# oxitls-core: getrandom-backed rand_core-0.6 `OsRng` adapter for the RSA bench
+# (rsa 0.9 needs the 0.6 CryptoRngCore bound; workspace rand is 0.10).
+oxitls-core                      = { workspace = true }
+getrandom                        = { workspace = true }
+sha2                             = { version = "0.11", default-features = false, features = ["oid"] }
+# Comparison crates (bench-only, do NOT appear on the oxitls library normal edge)
+ring         = { version = "0.17" }
+aws-lc-rs    = { version = "1" }
+# HTTP latency bench: oxihttp (server + TLS) — dev-only, must not appear on normal edge
+# oxihttp      = { path = "../../../oxihttp/crates/oxihttp", default-features = false, features = ["tls"] }  # temporarily removed for publish (cross-workspace path dep; oxihttp published after oxitls); restore after publish complete
+# hyper         = { workspace = true }  # temporarily removed (needed only for oxihttp integration bench)
+# hyper-util    = { workspace = true }  # temporarily removed
+# http-body-util = { workspace = true }  # temporarily removed

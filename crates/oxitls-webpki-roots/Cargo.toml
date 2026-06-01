@@ -1,0 +1,49 @@
+[package]
+name = "oxitls-webpki-roots"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "OxiTLS webpki trust anchors — Mozilla CA bundle, pure Rust"
+categories = ["cryptography", "network-programming"]
+keywords = ["tls", "rustls", "webpki", "pure-rust", "cooljapan"]
+
+[features]
+default = []
+# Enables platform native certificate store (macOS Security.framework / Windows SChannel)
+native-roots = []
+# Enables dhat heap profiler as global allocator in benches
+dhat-heap = ["dep:dhat"]
+
+[dependencies]
+oxitls-core = { workspace = true }
+rustls = { workspace = true }
+rustls-pki-types = { workspace = true }
+rustls-pemfile = { workspace = true }
+webpki-roots = { workspace = true }
+sha2 = { version = "0.11", default-features = false, features = ["alloc"] }
+x509-parser = { workspace = true }
+lru = { workspace = true }
+tokio = { workspace = true }
+time = { workspace = true }
+security-framework = { workspace = true }
+schannel = { workspace = true }
+
+[[bench]]
+name    = "webpki_roots_construction"
+harness = false
+
+[[bench]]
+name    = "root_store_memory"
+harness = false
+
+[dev-dependencies]
+criterion        = { workspace = true }
+tokio            = { workspace = true, features = ["full"] }
+webpki-roots     = { workspace = true }
+
+[dependencies.dhat]
+workspace = true
+optional  = true

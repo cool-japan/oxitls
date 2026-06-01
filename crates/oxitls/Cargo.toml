@@ -1,0 +1,71 @@
+[package]
+name = "oxitls"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "OxiTLS — Pure-Rust TLS facade (rustls + RustCrypto, zero FFI by default)"
+categories = ["cryptography", "network-programming"]
+keywords = ["tls", "rustls", "pure-rust", "cooljapan", "oxitls"]
+
+[features]
+default = ["pure", "webpki-roots"]
+pure = [
+    "dep:oxitls-adapter-rustls-rustcrypto",
+    "dep:rustls",
+    "dep:rustls-pemfile",
+    "dep:rustls-pki-types",
+    "dep:tokio-rustls",
+    "dep:tokio",
+    "dep:aes-gcm",
+    "dep:getrandom",
+    "dep:sha2",
+]
+webpki-roots = ["dep:oxitls-webpki-roots"]
+h2 = ["dep:oxitls-h2"]
+rcgen = ["dep:oxitls-rcgen"]
+quic-preview = ["pure"]
+# Passthrough for the generic-transport GAT traits in oxitls-core.
+generic-transport = ["oxitls-core/generic-transport"]
+# Namespace reservation for post-quantum key exchange (X25519MLKEM768).
+# Full wiring is deferred to Wave 6 pending rustls KX-group API stabilisation.
+post-quantum = ["dep:oxitls-adapter-rustls-rustcrypto", "oxitls-adapter-rustls-rustcrypto/post-quantum"]
+# Enable the aws-lc-rs backed CryptoProvider.  Opt-in only: default closure stays Pure Rust.
+aws-lc = ["dep:oxitls-adapter-aws-lc", "oxitls-adapter-aws-lc/aws-lc"]
+# Enable the PKCS#11 HSM/TPM signing adapter.  Opt-in only: default closure stays Pure Rust.
+pkcs11 = ["dep:oxitls-adapter-pkcs11", "oxitls-adapter-pkcs11/pkcs11"]
+
+[dependencies]
+oxitls-core = { workspace = true }
+oxitls-adapter-rustls-rustcrypto = { workspace = true, optional = true }
+oxitls-adapter-aws-lc = { workspace = true, optional = true }
+oxitls-adapter-pkcs11 = { workspace = true, optional = true }
+oxitls-webpki-roots = { workspace = true, optional = true }
+oxitls-h2 = { workspace = true, optional = true }
+oxitls-rcgen = { workspace = true, optional = true }
+rustls = { workspace = true, optional = true }
+rustls-pemfile = { workspace = true, optional = true }
+rustls-pki-types = { workspace = true, optional = true }
+tokio-rustls = { workspace = true, optional = true }
+tokio = { workspace = true, optional = true }
+# OxiTicketer: AES-256-GCM for session-ticket encryption (no ring).
+# Gated behind the `pure` feature since ticketer.rs uses rustls types.
+aes-gcm   = { workspace = true, optional = true }
+getrandom = { workspace = true, optional = true }
+# sha2: SHA-256 fingerprinting for anti-replay ticket tracking (no ring).
+# Not workspace-shared (per workspace policy comment) — added directly here.
+sha2 = { version = "0.11", optional = true }
+
+[dev-dependencies]
+oxitls-adapter-rustls-rustcrypto = { workspace = true }
+oxitls-rcgen = { workspace = true }
+# Existing tests use rcgen::KeyPair::generate() which requires the `crypto`
+# feature (backed by ring).  Ring on a dev-only edge is acceptable per project
+# policy; no ring in the normal (library) edge.
+rcgen = { workspace = true, features = ["crypto", "pem", "ring"] }
+rustls = { workspace = true }
+rustls-pki-types = { workspace = true }
+tokio = { workspace = true, features = ["full", "macros"] }
+tokio-rustls = { workspace = true }

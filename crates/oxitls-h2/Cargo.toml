@@ -1,0 +1,53 @@
+[package]
+name = "oxitls-h2"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "OxiTLS HTTP/2 binding — h2 over tokio-rustls TLS streams"
+categories = ["cryptography", "network-programming", "web-programming"]
+keywords = ["tls", "http2", "h2", "pure-rust", "cooljapan"]
+
+[features]
+default = []
+
+[dependencies]
+oxitls-core = { workspace = true }
+h2 = { workspace = true }
+bytes = { workspace = true }
+http = { workspace = true }
+tokio = { workspace = true, features = ["net", "time", "rt", "sync"] }
+tokio-rustls = { workspace = true }
+rustls = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "net"] }
+rcgen = { workspace = true, features = ["pem", "crypto", "ring"] }
+rustls-pki-types = { workspace = true }
+# temporarily removed for publish (circular/forward dev-dep); restore after publish complete
+# oxitls-adapter-rustls-rustcrypto = { workspace = true }
+http = { workspace = true }
+futures = { workspace = true }
+criterion = { workspace = true }
+
+[[bench]]
+name = "h2_handshake"
+harness = false
+
+[[bench]]
+name = "h2_throughput_single_stream"
+harness = false
+
+[[bench]]
+name = "h2_throughput_multi_stream"
+harness = false
+
+[[bench]]
+name = "h2_hpack_compression"
+harness = false
+
+[[bench]]
+name = "h2_memory_high_concurrency"
+harness = false

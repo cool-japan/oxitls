@@ -1,0 +1,23 @@
+[advisories]
+ignore = []
+
+[licenses]
+allow = ["Apache-2.0", "MIT", "ISC", "Unicode-3.0", "BSD-2-Clause", "BSD-3-Clause", "OpenSSL"]
+unused-allowed-license = "allow"
+
+[bans]
+multiple-versions = "warn"
+deny = [
+  { name = "ring" },
+  { name = "aws-lc-rs" },
+  { name = "aws-lc-sys" },
+  { name = "openssl" },
+  { name = "openssl-sys" },
+  { name = "native-tls" },
+  { name = "security-framework" },
+]
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
