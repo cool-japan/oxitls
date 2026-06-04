@@ -21,7 +21,12 @@ resumption.
 - [x] Add `ClientBuilder::with_crl(crl_der: Vec<u8>)` for CRL checking (~30 SLOC, delegates to adapter)
 - [x] Add `ServerBuilder::with_ocsp_response_resolver(Arc<dyn OcspResponseResolver>)` for dynamic OCSP stapling (~80 SLOC)
 - [x] Add `ServerBuilder::with_ticketer_rotation_interval(Duration)` that spawns a background task rotating OxiTicketer keys (~60 SLOC)
-- [ ] Add ECH (Encrypted Client Hello) support behind `ech` feature flag when rustls adds ECH API (~150 SLOC, blocked on rustls)
+- [x] Add ECH (Encrypted Client Hello) support behind `ech` feature flag (done 2026-06-03)
+  - **Goal:** `oxitls` facade `ClientBuilder` can enable ECH (real config or GREASE mode) and the resulting `OxiTlsStream` exposes `ech_status()`. Depends on Slice A (`pure_hpke_suites()` from `oxitls-adapter-rustls-rustcrypto`).
+  - **Design:** New `ech = ["pure", "dep:oxitls-adapter-rustls-rustcrypto", "oxitls-adapter-rustls-rustcrypto/ech"]` feature (mirrors post-quantum, implies pure). `ClientBuilder` gains `#[cfg(feature="ech")] ech_mode: Option<rustls::client::EchMode>` field; two builder methods: `with_ech_config_list(bytes) -> Result<Self, TlsError>` (parses ECHConfigList via `EchConfig::new(bytes, pure_hpke_suites())`, stores `EchMode::Enable`) and `with_ech_grease(self) -> Self` (stores `EchMode::Grease`). `build()` branches at line ~542: when ech_mode is Some, calls `.with_ech(mode)?` instead of `.with_protocol_versions(versions)` (both yield `ConfigBuilder<ClientConfig, WantsVerifier>`; with_ech forces TLS 1.3). `OxiTlsStream::ech_status()` via `Inner::Client(s) => Some(s.get_ref().1.ech_status()), Server => None` (mirrors early_data/export_keying_material). Re-export `rustls::client::{EchMode,EchConfig,EchGreaseConfig,EchStatus}` cfg-gated.
+  - **Files:** `crates/oxitls/src/tls13/client.rs`, `crates/oxitls/src/stream.rs`, `crates/oxitls/src/lib.rs` (re-exports), `crates/oxitls/Cargo.toml` (ech feature).
+  - **Tests:** GREASE-mode loopback handshake asserting `ech_status() == EchStatus::Grease`; Enable-path test building ClientConfig from a self-crafted single-suite ECHConfigList; error test for malformed list. Full Accepted path untestable (no rustls ECH server) — noted in test comments.
+  - **Risk:** WantsVersions consume-order — handled by build() branch. Note rustls `with_ech` forces TLS1.3 internally; protocol_versions field ignored when ech path taken.
 - [x] Add `post-quantum` feature flag: facade PQ provider wiring active — Wave 6 Slice FAC (client.rs + server.rs auto-select `pure_provider_with_pq()` when `post-quantum` feature is enabled; full handshake test `pq_handshake_via_facade` in wave6_pq_rpk_facade.rs; pending parallel Slice PQ landing); 2026-05-29
 - [x] Add raw public keys (RFC 7250) support — Wave 6 Slice FAC (ClientBuilder::with_server_raw_public_keys, ServerBuilder::with_server_raw_public_key + with_client_raw_public_keys wired; tests in wave6_pq_rpk_facade.rs gated on Slice RPK landing; RPK-only config validation guard fixed); 2026-05-29
 - [x] Add `quic-preview` feature flag reserving the namespace for oxiquic TLS integration (~10 SLOC, feature flag only)
@@ -69,3 +74,21 @@ resumption.
 - [x] Coordinate `quic-preview` feature flag with `oxiquic-tls` crate
 - [x] Wire `TlsConnectionExt` into `oxihttp-core` for HTTP-level TLS introspection — `PeerCertInfo` extended with typed `version`/`cipher_suite`/`sni`; both accept loops use `tls_stream.tls_connection_info()`; `req.tls_connection_info()` added to `Request`; test `test_request_handler_can_read_tls_connection_info` in oxihttp/tests/mtls_test.rs
 - [x] Provide `oxihttp-server` with `ServerBuilder` defaults optimized for HTTP/2 (ALPN, settings) — `TlsConfig::http2_defaults()` and `http2_defaults_from_der()` added; `ServerBuilder::with_alpn()` already wires ALPN; `ServerHttp2Settings` covers H2 tuning
+
+## Wave 14
+
+- [x] ECHConfigList generation — mint a publishable ECH config from a fresh HPKE keypair (done 2026-06-03)
+  - **Goal:** oxitls can mint a spec-correct `ECHConfigList` (draft-ietf-tls-esni-18, version `0xfe0d`) from a freshly generated HPKE keypair, returning both the publishable config bytes and the operator's long-term HPKE private key. Makes ECH deployable (not just GREASE) and upgrades test coverage from GREASE-only to the real Enable path. rustls parses ECHConfig but ships no generator — per IMPLEMENT POLICY we build it.
+  - **Design:**
+    - New submodule `crates/oxitls-adapter-rustls-rustcrypto/src/hpke/ech_config.rs`:
+      `pub struct GeneratedEchConfig { pub config_list: Vec<u8>, pub private_key: Vec<u8>, pub public_key: Vec<u8>, pub config_id: u8 }`
+      `pub fn generate_ech_config_list(suite: &'static dyn Hpke, config_id: u8, public_name: &str, maximum_name_length: u8) -> Result<GeneratedEchConfig, rustls::Error>`
+    - Internals: `suite.generate_key_pair()?` → `(pk, sk)`. Read `suite.suite()` for `kem_id/kdf_id/aead_id`. Hand-roll TLS-presentation-language bytes (forced by unnameable `PayloadU16<NonEmpty>` field): outer `u16`-len ECHConfigList → `ECHConfig{ u16 version=0xfe0d, u16 len, contents }` → `ECHConfigContents{ HpkeKeyConfig{ u8 config_id, u16 kem_id, u16-len pk.0, u16-len cipher_suites[{u16 kdf_id, u16 aead_id}] }, u8 maximum_name_length, u8-len public_name, u16-len extensions=∅ }`.
+    - Self-validate: parse emitted bytes back via `rustls::client::EchConfig::new(EchConfigListBytes::from(bytes.clone()), pure_hpke_suites())` and via `Vec::<EchConfigPayload>::read` before returning — a malformed emit fails fast.
+    - `…/hpke/mod.rs`: add `pub mod ech_config;`.
+    - `…/rustls-rustcrypto/src/lib.rs`: `#[cfg(feature="ech")] pub use hpke::ech_config::{GeneratedEchConfig, generate_ech_config_list};`
+    - `crates/oxitls/src/lib.rs`: `#[cfg(feature="ech")] pub use oxitls_adapter_rustls_rustcrypto::{GeneratedEchConfig, generate_ech_config_list};`
+  - **Files:** NEW `crates/oxitls-adapter-rustls-rustcrypto/src/hpke/ech_config.rs`; `…/hpke/mod.rs` (+1 line); `…/rustls-rustcrypto/src/lib.rs`; `crates/oxitls/src/lib.rs`; NEW `crates/oxitls/tests/wave14_ech_config_tests.rs`. No new deps.
+  - **Prerequisites:** Slice A (for shared mod.rs file-ordering; functionally independent).
+  - **Tests:** `ech_generated_config_accepted_by_builder` — mint → `ClientBuilder::new().with_ech_config_list(cfg.config_list)` returns `Ok` and mode is `Enable`; `ech_generated_config_roundtrips` — parse emitted bytes back and assert `config_id/kem_id/public_key/public_name/cipher_suites` field-for-field; `ech_generated_config_x25519_and_p256` — both KEM families mint+parse. Note in test header: `EchStatus::Accepted` end-to-end requires rustls ECH server (not available in 0.23.40).
+  - **Risk:** wire-format byte errors mitigated by parsing every emitted config back through rustls before returning. Public-key length is KEM-dependent (X25519=32, P-256=65), read from `pk.0.len()` not hardcoded.

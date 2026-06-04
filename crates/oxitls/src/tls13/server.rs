@@ -6,6 +6,7 @@
 
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::time::Duration;
 
 use rustls::{
     server::{ProducesTickets, ResolvesServerCertUsingSni},
@@ -94,6 +95,16 @@ pub struct ServerBuilder {
     protocol_versions: Option<Vec<&'static rustls::SupportedProtocolVersion>>,
     /// Optional session-ticket encryptor/decryptor (server-side resumption).
     ticketer: Option<Arc<dyn ProducesTickets>>,
+    /// Optional auto-rotating ticketer: a concrete [`OxiTicketer`] paired with
+    /// the rotation interval.  When set, `build()` installs the ticketer as
+    /// `config.ticketer` **and** spawns a background tokio task that calls
+    /// `OxiTicketer::rotate()` on each interval tick.
+    ///
+    /// Setting this field clears `ticketer`; setting `ticketer` clears this
+    /// field (last-write-wins mutual exclusion).
+    ///
+    /// [`OxiTicketer`]: crate::ticketer::OxiTicketer
+    rotation_ticketer: Option<(Arc<crate::ticketer::OxiTicketer>, Duration)>,
     /// Optional OCSP response to staple to the handshake.
     ocsp_response: Option<Vec<u8>>,
     /// Optional maximum TLS record fragment size (bytes).
@@ -118,6 +129,12 @@ pub struct ServerBuilder {
     client_raw_public_keys: Option<Vec<rustls::pki_types::SubjectPublicKeyInfoDer<'static>>>,
     /// Optional key-log policy for TLS session secret export (SSLKEYLOGFILE).
     key_log_policy: Option<KeyLogPolicy>,
+    /// Enable RFC 8879 TLS certificate compression (zlib, OxiARC).
+    ///
+    /// When `true`, `build()` installs the OxiARC zlib compressor/decompressor
+    /// on the produced `ServerConfig`.  Requires the `cert-compression` feature.
+    #[cfg(feature = "cert-compression")]
+    enable_cert_compression: bool,
 }
 
 impl ServerBuilder {
@@ -131,6 +148,7 @@ impl ServerBuilder {
             sni_map: Vec::new(),
             protocol_versions: None,
             ticketer: None,
+            rotation_ticketer: None,
             ocsp_response: None,
             max_fragment_size: None,
             max_early_data_size: None,
@@ -138,6 +156,8 @@ impl ServerBuilder {
             server_raw_public_key: None,
             client_raw_public_keys: None,
             key_log_policy: None,
+            #[cfg(feature = "cert-compression")]
+            enable_cert_compression: false,
         }
     }
 
@@ -278,9 +298,15 @@ impl ServerBuilder {
     /// Without calling this method the server sends no session tickets and
     /// resumption falls back to client-side session IDs (or none).
     ///
+    /// Calling this method clears any rotation ticketer previously set with
+    /// [`with_ticketer_rotation_interval`](Self::with_ticketer_rotation_interval)
+    /// (last-write-wins semantics).
+    ///
     /// [`OxiTicketer`]: crate::ticketer::OxiTicketer
     pub fn with_ticketer(mut self, ticketer: Arc<dyn ProducesTickets>) -> Self {
         self.ticketer = Some(ticketer);
+        // Clear any pending rotation ticketer — last-write-wins.
+        self.rotation_ticketer = None;
         self
     }
 
@@ -376,25 +402,76 @@ impl ServerBuilder {
         self
     }
 
-    /// Set a ticketer rotation interval, wrapping an [`OxiTicketer`] internally.
+    /// Install an [`OxiTicketer`] with automatic key rotation on the given interval.
     ///
-    /// This is a convenience method that creates an [`OxiTicketer`] with the
-    /// given interval hint and installs it via [`with_ticketer`](Self::with_ticketer).
-    /// The `OxiTicketer` uses AES-256-GCM; the interval is advisory.
+    /// Creates a fresh [`OxiTicketer`] (AES-256-GCM, 32-byte keys from OS entropy)
+    /// and arranges for its keys to be rotated every `interval` by a detached
+    /// background tokio task.  The rotation task holds a **weak** reference to the
+    /// ticketer; it exits automatically when the last strong reference (held by the
+    /// produced `ServerConfig`) is dropped, so no manual cancellation is needed.
+    ///
+    /// # Key rotation semantics
+    ///
+    /// On each tick the old *current* key becomes the *previous* key (kept for one
+    /// cycle so in-flight tickets remain decryptable) and a fresh random key becomes
+    /// the new *current* key.  See [`OxiTicketer::rotate`] for details.
+    ///
+    /// # Tokio runtime requirement
+    ///
+    /// [`build()`](Self::build) spawns the rotation task via `tokio::spawn`.  It
+    /// must therefore be called from within a tokio async context.  If no runtime
+    /// is present the spawn will panic; use [`with_ticketer`](Self::with_ticketer)
+    /// directly for non-async build contexts.
+    ///
+    /// # Minimum interval
+    ///
+    /// Intervals shorter than 1 second are clamped to 1 second to prevent
+    /// accidental busy-loops.
+    ///
+    /// # Errors from the background task
+    ///
+    /// Rotation failures (OS RNG unavailable) are logged at `WARN` level via
+    /// `tracing` and do not stop the loop — the server continues to use its
+    /// current key set.
+    ///
+    /// # Mutual exclusion with `with_ticketer`
+    ///
+    /// Calling this method clears any ticketer previously set with
+    /// [`with_ticketer`](Self::with_ticketer) (last-write-wins semantics).
+    /// Calling `with_ticketer` after this method clears the rotation ticketer.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// # async fn example() -> Result<(), oxitls_core::TlsError> {
+    /// use std::time::Duration;
+    /// use oxitls::tls13::ServerBuilder;
+    ///
+    /// let config = ServerBuilder::new()
+    ///     // ... cert/key ...
+    ///     .with_ticketer_rotation_interval(Duration::from_secs(3600))
+    ///     .build()?;
+    /// # Ok(())
+    /// # }
+    /// ```
     ///
     /// [`OxiTicketer`]: crate::ticketer::OxiTicketer
-    pub fn with_ticketer_rotation_interval(self, _interval: std::time::Duration) -> Self {
-        // Create an OxiTicketer for session ticket encryption.
-        // Errors creating the ticketer are silently ignored (no ticketer is
-        // installed). Use `with_ticketer` directly for explicit error handling.
-        let ticketer_result = crate::ticketer::OxiTicketer::new().map(|t| {
-            let arc: Arc<dyn ProducesTickets> = Arc::new(t);
-            arc
-        });
-        match ticketer_result {
-            Ok(ticketer) => self.with_ticketer(ticketer),
-            Err(_) => self,
+    /// [`OxiTicketer::rotate`]: crate::ticketer::OxiTicketer::rotate
+    pub fn with_ticketer_rotation_interval(mut self, interval: Duration) -> Self {
+        match crate::ticketer::OxiTicketer::new() {
+            Ok(ticketer) => {
+                let arc = Arc::new(ticketer);
+                self.rotation_ticketer = Some((arc, interval));
+                // Clear any plain ticketer — last-write-wins.
+                self.ticketer = None;
+            }
+            Err(_) => {
+                // OS RNG unavailable: skip ticketer installation entirely.
+                // Callers that need explicit error handling should use
+                // `OxiTicketer::new()` + `with_ticketer()` directly.
+            }
         }
+        self
     }
 
     /// Alias for [`with_pem_cert_and_key`](Self::with_pem_cert_and_key).
@@ -427,6 +504,19 @@ impl ServerBuilder {
     /// in-memory buffer for testing or a structured logger).
     pub fn with_key_log_custom(mut self, arc: Arc<dyn KeyLog + Send + Sync>) -> Self {
         self.key_log_policy = Some(KeyLogPolicy::Custom(arc));
+        self
+    }
+
+    /// Enable RFC 8879 TLS certificate compression using OxiARC pure-Rust zlib.
+    ///
+    /// When enabled, the produced `ServerConfig` will have its `cert_compressors`
+    /// and `cert_decompressors` set to the OxiARC zlib implementations.
+    /// Cert compression only applies to TLS 1.3; rustls ignores it for TLS 1.2.
+    ///
+    /// Requires the `cert-compression` feature.
+    #[cfg(feature = "cert-compression")]
+    pub fn with_cert_compression(mut self) -> Self {
+        self.enable_cert_compression = true;
         self
     }
 
@@ -515,9 +605,44 @@ impl ServerBuilder {
         };
 
         config.alpn_protocols = self.alpn;
-        if let Some(ticketer) = self.ticketer {
+
+        // Install ticketer: rotation_ticketer takes priority (last-write-wins semantics
+        // are enforced by the builder methods; at this point at most one is Some).
+        if let Some((ticketer_arc, interval)) = self.rotation_ticketer {
+            // Clamp to a 1-second minimum to prevent accidental busy-loops.
+            let effective_interval = interval.max(Duration::from_secs(1));
+
+            // Install the concrete ticketer as the config's dyn ProducesTickets.
+            config.ticketer = Arc::clone(&ticketer_arc) as Arc<dyn ProducesTickets>;
+
+            // Spawn the rotation background task.  We use a Weak reference so
+            // the task exits automatically once the ServerConfig (and all its
+            // clones) are dropped — preventing a permanent key-material leak.
+            let weak = Arc::downgrade(&ticketer_arc);
+            tokio::spawn(async move {
+                let mut ticker = tokio::time::interval(effective_interval);
+                // Skip the first (immediate) tick — no rotation needed at t=0.
+                ticker.tick().await;
+                loop {
+                    ticker.tick().await;
+                    match weak.upgrade() {
+                        None => {
+                            // All ServerConfig clones have been dropped; stop.
+                            break;
+                        }
+                        Some(strong) => {
+                            if let Err(e) = strong.rotate() {
+                                tracing::warn!("OxiTicketer rotation failed (OS RNG error): {}", e);
+                                // Continue looping — will retry on next tick.
+                            }
+                        }
+                    }
+                }
+            });
+        } else if let Some(ticketer) = self.ticketer {
             config.ticketer = ticketer;
         }
+
         if let Some(size) = self.max_fragment_size {
             config.max_fragment_size = Some(size);
         }
@@ -527,6 +652,13 @@ impl ServerBuilder {
         if let Some(policy) = self.key_log_policy {
             config.key_log = Arc::new(ServerKeyLogBridge::new(policy));
         }
+
+        // RFC 8879 certificate compression (TLS 1.3 only).
+        #[cfg(feature = "cert-compression")]
+        if self.enable_cert_compression {
+            oxitls_adapter_rustls_rustcrypto::install_cert_compression_server(&mut config);
+        }
+
         Ok(config)
     }
 }
@@ -562,6 +694,7 @@ impl Clone for ServerBuilder {
             sni_map: self.sni_map.clone(),
             protocol_versions: self.protocol_versions.clone(),
             ticketer: self.ticketer.clone(),
+            rotation_ticketer: self.rotation_ticketer.clone(),
             ocsp_response: self.ocsp_response.clone(),
             max_fragment_size: self.max_fragment_size,
             max_early_data_size: self.max_early_data_size,
@@ -569,6 +702,8 @@ impl Clone for ServerBuilder {
             server_raw_public_key: self.server_raw_public_key.clone(),
             client_raw_public_keys: self.client_raw_public_keys.clone(),
             key_log_policy: self.key_log_policy.clone(),
+            #[cfg(feature = "cert-compression")]
+            enable_cert_compression: self.enable_cert_compression,
         }
     }
 }

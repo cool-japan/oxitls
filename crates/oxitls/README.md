@@ -12,16 +12,16 @@ The facade also performs **provider selection** through feature flags. The defau
 ```toml
 [dependencies]
 # Default: Pure-Rust TLS + Mozilla webpki roots
-oxitls = "0.1.0"
+oxitls = "0.1.1"
 
 # HTTP/2 over TLS and Pure-Rust cert generation
-oxitls = { version = "0.1.0", features = ["h2", "rcgen"] }
+oxitls = { version = "0.1.1", features = ["h2", "rcgen"] }
 
 # Opt in to the aws-lc-rs provider (NOT Pure Rust — C/FFI):
-oxitls = { version = "0.1.0", features = ["aws-lc"] }
+oxitls = { version = "0.1.1", features = ["aws-lc"] }
 
 # Opt in to the PKCS#11 HSM/TPM signer (NOT Pure Rust — loads a C module):
-oxitls = { version = "0.1.0", features = ["pkcs11"] }
+oxitls = { version = "0.1.1", features = ["pkcs11"] }
 ```
 
 ## Quick Start
@@ -175,6 +175,19 @@ RFC 8446 §8 single-use ticket protection for 0-RTT, wrapping any `ProducesTicke
 | `ReplayVerdict` | `Fresh` or `Replayed` |
 | `Clock` (trait), `SystemClock`, `MockClock` | Monotonic clock abstraction (mockable for tests) |
 
+### Encrypted Client Hello *(feature `ech`)*
+
+RFC 9180 base-mode HPKE provider with 4 suites (X25519/P-256 × AES-128-GCM/ChaCha20Poly1305), proven against RFC 9180 Appendix A KATs.
+
+| Item | Description |
+|------|-------------|
+| `ClientBuilder::with_ech_config_list(bytes) -> Result<Self, TlsError>` | Parse an ECHConfigList and enable real ECH mode |
+| `ClientBuilder::with_ech_grease() -> Self` | Enable GREASE ECH mode (random padding, no server decryption) |
+| `OxiTlsStream::ech_status()` | Returns `Some(EchStatus)` on client streams; `None` on server streams |
+| `pure_hpke_suites() -> &'static [&'static dyn rustls::crypto::hpke::Hpke]` | The four HPKE suite statics re-exported from the adapter |
+| `generate_ech_config_list(..)` *(feature `ech`)* | Mint a publishable ECHConfigList from a fresh HPKE keypair |
+| `EchMode`, `EchConfig`, `EchGreaseConfig`, `EchStatus` | Re-exported from `rustls::client` |
+
 ### Connection introspection
 
 | Item | Description |
@@ -212,6 +225,8 @@ When `generic-transport` is enabled, `ClientBuilder` / `ServerBuilder` implement
 | `quic-preview` | — | ✅ | Re-exports the Pure-Rust provider for QUIC (implies `pure`) |
 | `generic-transport` | — | ✅ | GAT-based generic connector/acceptor traits |
 | `post-quantum` | — | ✅ | X25519MLKEM768 hybrid KX namespace (implies adapter `post-quantum`) |
+| `ech` | — | ✅ | Encrypted Client Hello — RFC 9180 HPKE base-mode; GREASE + real ECH config-list; implies `pure` |
+| `cert-compression` | — | ✅ | RFC 8879 TLS certificate compression via OxiARC pure-Rust zlib |
 | `aws-lc` | — | ❌ (C/FFI) | aws-lc-rs provider via `oxitls-adapter-aws-lc` |
 | `pkcs11` | — | ❌ (loads a C module) | PKCS#11 HSM/TPM signer via `oxitls-adapter-pkcs11` |
 

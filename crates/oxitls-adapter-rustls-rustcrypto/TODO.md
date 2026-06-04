@@ -53,3 +53,32 @@ and `RustcryptoAcceptor` (~108 SLOC). Per-config provider injection -- never cal
 - [x] Ensure `oxitls-bench` benchmarks cover adapter-level config construction — `benches/builder_construction.rs` in oxitls-bench + `benches/builder.rs` in this crate
 - [x] Coordinate with `oxihttp-client` for per-request TLS config overrides — `RequestTlsConfig` + `HttpsClient::with_request_tls_config()` implemented in oxihttp-client; 3 integration tests pass
 - [x] Provide `From<rustls::Error> for oxitls_core::TlsError` mapping for all new error variants
+
+## Wave 14
+
+- [x] RFC 9180 §5.3 HPKE Context.Export + typed public HPKE API (planned 2026-06-03)
+  - **Goal:** The Wave-13 hand-rolled HPKE gains a public, KAT-verified `export()` on both sender and receiver contexts, plus an ergonomic oxitls-native typed API (`setup_sender`/`setup_receiver` returning concrete `HpkeSealerCtx<A>`/`HpkeOpenerCtx<A>` and four `pub const` typed suite values). `exporter_secret` — currently computed and discarded — is threaded through and surfaced.
+  - **Design:**
+    - `kdf.rs`: add `exporter_secret: [u8; 32]` to `HpkeKeyMaterial`; un-discard `_exporter_secret` (already correctly derived: `LabeledExpand(secret,"exp",ks_context,32)`). Add `labeled_expand_checked(suite_id, prk, label, info, l) -> Result<Vec<u8>, rustls::Error>` guarding `l <= 255*32` (public Export path must not panic on attacker-influenced L).
+    - `mod.rs`: store `exporter_secret: [u8; 32]` and `suite_id: [u8; 10]` in `HpkeSealerCtx<A>` and `HpkeOpenerCtx<A>` (suite_id needed for Export's full-HPKE-domain LabeledExpand; ctx is generic only over A). Make both ctx types `pub`. Add inherent `pub fn export(&self, exporter_context: &[u8], len: usize) -> Result<Vec<u8>, rustls::Error>` = `labeled_expand_checked(&self.suite_id, &self.exporter_secret, b"sec", exporter_context, len)` (RFC 9180 §5.3 label = `"sec"`, NOT `"exp"`). Add typed `setup_sender`/`setup_receiver` on `HpkeSuiteImpl<K,A>` that return concrete ctx types (rustls `setup_sealer`/`setup_opener` delegate to these). Expose four `pub const` suite values and `pub use kem::{KemX25519,KemP256}`, `pub use aead::{AeadAes128Gcm,AeadChacha20}`.
+    - `vectors.rs`: add `exporter_secret: [u8; 32]` to `Kat` struct; add RFC 9180 Appendix A exporter KAT values for A.1/A.2/A.3/A.5 (three standard queries each: empty ctx, `"00"`, `"TestContext"`, L=32 each).
+    - `lib.rs`: re-export `HpkeSealerCtx`, `HpkeOpenerCtx`, the four suite consts, `KemX25519`, `KemP256`, `AeadAes128Gcm`, `AeadChacha20`.
+  - **Files:** `crates/oxitls-adapter-rustls-rustcrypto/src/hpke/{kdf.rs,mod.rs,vectors.rs}`, `…/src/lib.rs`. No Cargo.toml change.
+  - **Prerequisites:** none.
+  - **Tests:** RFC 9180 Appendix A KAT — assert derived `exporter_secret` == KAT; assert each `export()` == `exported_value` byte-for-byte; `setup_sender`/`setup_receiver` round-trip asserting both sides export same value for same `(context, L)`; `export` with len > 255*32 returns `Err` (not panic).
+  - **Risk:** label `"sec"` for Export vs `"exp"` for exporter_secret derivation must not be confused. suite_id must be full 10-byte HPKE id. Both pinned by KATs.
+
+- [x] RFC 8879 certificate compression (TLS 1.3) backed by OxiARC zlib — pure Rust (done 2026-06-03)
+  - **Goal:** oxitls clients/servers can negotiate certificate compression (RFC 8879, algorithm 1 = zlib) backed entirely by `oxiarc-deflate` (COOLJAPAN pure-Rust RFC 1950 zlib), behind a new `cert-compression` feature. Zero C/forbidden codecs; rustls's own `zlib`/`brotli` features stay off.
+  - **Design:**
+    - New `src/cert_compression.rs`: zero-sized `OxiArcZlibCompressor` and `OxiArcZlibDecompressor` implementing `rustls::compress::{CertCompressor,CertDecompressor}`. `compress` maps `Interactive→level 1`, `Amortized→level 9`; calls `oxiarc_deflate::zlib_compress`. `decompress` calls `zlib_decompress`, enforces strict `d.len() == output.len()` contract before `copy_from_slice`. Expose `pub const OXIARC_ZLIB_COMPRESSOR: &dyn CertCompressor` and `pub const OXIARC_ZLIB_DECOMPRESSOR: &dyn CertDecompressor`. Add `pub fn install_cert_compression(c: &mut ClientConfig)` / `(&mut ServerConfig)` setting the public `cert_compressors`/`cert_decompressors` Vec fields on each config.
+    - `Cargo.toml`: feature `cert-compression = ["dep:oxiarc-deflate"]`; `oxiarc-deflate = { workspace = true, optional = true }`. Root workspace.dependencies gains `oxiarc-deflate = { version = "0.3", default-features = false }` (published on crates.io 0.3.2, pure Rust, no C).
+    - `lib.rs`: `#[cfg(feature="cert-compression")] pub mod cert_compression; pub use cert_compression::{OXIARC_ZLIB_COMPRESSOR, OXIARC_ZLIB_DECOMPRESSOR, install_cert_compression};`
+  - **Files:** NEW `…/src/cert_compression.rs`; `…/src/lib.rs`; `…/Cargo.toml`; root `Cargo.toml`.
+  - **Prerequisites:** `oxiarc-deflate` 0.3.2 verified published on crates.io; pure Rust, no build.rs/sys.
+  - **Tests:** unit round-trip compress→decompress on a sample cert-chain blob (both levels); length-mismatch input rejected as `DecompressionFailed`; integration TLS 1.3 loopback with both peers using `with_cert_compression()` asserting handshake success.
+  - **Risk:** `oxiarc-deflate` fetch from crates.io; mitigated — feature is opt-in so default build is unaffected. Brotli (alg 2) via `oxiarc-brotli` is a follow-up.
+
+## Proposed follow-ups
+
+- RFC 8879 brotli (algorithm 2) via `oxiarc-brotli` — natural extension of cert-compression once `oxiarc-brotli` compress/decompress API is byte-verified.

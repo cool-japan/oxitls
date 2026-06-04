@@ -26,8 +26,7 @@ rustls = { workspace = true }
 tokio = { workspace = true, features = ["rt-multi-thread", "macros", "net"] }
 rcgen = { workspace = true, features = ["pem", "crypto", "ring"] }
 rustls-pki-types = { workspace = true }
-# temporarily removed for publish (circular/forward dev-dep); restore after publish complete
-# oxitls-adapter-rustls-rustcrypto = { workspace = true }
+oxitls-adapter-rustls-rustcrypto = { path = "../oxitls-adapter-rustls-rustcrypto" }
 http = { workspace = true }
 futures = { workspace = true }
 criterion = { workspace = true }

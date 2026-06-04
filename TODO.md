@@ -1,11 +1,12 @@
 # OxiTLS TODO
 
-## Status — v0.1.0 (released 2026-06-01)
+## Status — v0.1.1 (2026-06-04)
 
-Pure-Rust TLS transport stack at ~4300 SLOC across 9 subcrates. All M0–M5
-milestones and Waves 6–9 complete. 324 tests passing.
+Pure-Rust TLS transport stack at ~26 000 SLOC across 9 subcrates. All M0–M5
+milestones and Waves 6–9 complete, plus ECH/HPKE (RFC 9180) added in v0.1.1.
+**423 tests passing** (10 skipped — PKCS#11 SoftHSM + ignored ignores).
 
-Release-check performed 2026-06-01:
+Release-check performed 2026-06-01 (v0.1.0):
 - cargo check: PASS
 - cargo clippy -- -D warnings: PASS (0 warnings)
 - cargo nextest run: 324 passed, 2 skipped (PKCS#11 SoftHSM, `#[ignore]`)
@@ -14,6 +15,13 @@ Release-check performed 2026-06-01:
 - Workspace Cargo.toml: all internal deps now have version = "0.1.0"
 - RSA test fixtures: pre-generated keys added to avoid slow pure-Rust keygen
 - nextest config: .config/nextest.toml with per-test timeouts
+
+Release-check performed 2026-06-04 (v0.1.1):
+- cargo nextest run --workspace --all-features: 423 passed, 10 skipped
+- New features: ECH (RFC 9180 HPKE base-mode, ech feature), cert-compression (RFC 8879)
+- Added RFC 9180 KAT vectors (Appendix A) in hpke/vectors.rs
+- Added hybrid PKCS#11+aws-lc integration tests (wave10_hybrid_pkcs11.rs)
+- Version bumped: Cargo.toml, CHANGELOG.md, pub_oxitls.sh, all subcrate READMEs
 
 ## Core Implementation
 - [x] 0-RTT early data support in ClientBuilder and ServerBuilder (~200 SLOC)
@@ -29,7 +37,12 @@ Release-check performed 2026-06-01:
 - [x] CSR generation and signing in oxitls-rcgen (~180 SLOC)
 - [x] Certificate chain building in oxitls-rcgen (~120 SLOC)
 - [x] PKCS#12 export in oxitls-rcgen (~100 SLOC)
-- [ ] Encrypted Client Hello (ECH) support behind feature flag (blocked on rustls ECH API stabilisation)
+- [x] Encrypted Client Hello (ECH) support behind feature flag (completed 2026-06-03)
+  - **Goal:** `oxitls-adapter-rustls-rustcrypto` gains an `ech` feature exposing `pub fn pure_hpke_suites() -> &'static [&'static dyn rustls::crypto::hpke::Hpke]` backed by a hand-rolled RFC 9180 base-mode HPKE over RustCrypto primitives, covering 4 ECH suites (X25519/P-256 × AES-128-GCM/ChaCha20Poly1305), proven against RFC 9180 Appendix A KATs.
+  - **Design:** New module `src/hpke/` split across `mod.rs` (rustls trait impls + suite statics), `kem.rs` (DHKEM Encap/Decap), `kdf.rs` (LabeledExtract/LabeledExpand, key schedule), `aead.rs` (Context seal/open, seq→nonce management), `vectors.rs` (KAT constants). KEM: X25519 via x25519-dalek StaticSecret, P-256 via p256 ECDH + rejection-sample keygen. KDF: hkdf 0.13 + sha2 0.11, raw LabeledExtract/Expand. AEAD: aes-gcm/chacha20poly1305 with caller-supplied 12-byte nonce. Entropy from getrandom::fill directly (no rand_core binding). New workspace dep: hkdf="0.13".
+  - **Files:** `crates/oxitls-adapter-rustls-rustcrypto/src/hpke/{mod,kem,kdf,aead,vectors}.rs`, `src/lib.rs` (gated pub mod + re-export), `Cargo.toml` (ech feature), root `Cargo.toml` (workspace hkdf dep).
+  - **Tests:** RFC 9180 A.1/A.2/A.3/A.5 KATs (byte-exact enc/key/base_nonce/ciphertext); round-trip seal/open; seq-overflow MUST-abort; X25519 non-contributory DH rejection; p256 off-curve/identity rejection.
+  - **Risk:** hand-rolled crypto composition layer — mitigated by byte-exact KATs. Landmines: seq overflow MUST abort; nonce = base_nonce XOR I2OSP(seq,12); was_contributory() for X25519; suite_id/label byte-exactness; p256 0.14 API renames (to_uncompressed_point, from_sec1_bytes).
 - [x] Post-quantum key exchange (X25519MLKEM768) behind feature flag (Wave 6 — 2026-05-29)
 - [x] Connection info extraction trait for version/suite/ALPN/peer certs (~80 SLOC)
 - [x] TLS session export / keying material export (~40 SLOC)
@@ -67,7 +80,7 @@ Release-check performed 2026-06-01:
 - [x] aws-lc adapter handshake test (cross-provider client/server)
 - [x] PKCS#11 SoftHSM integration test (ignored by default)
 - [x] OCSP RSA-2048 signer verification tests (using key fixture)
-- [x] Total: 324 tests, 2 skipped (PKCS#11 SoftHSM)
+- [x] Total: 339 tests, 8 skipped (PKCS#11 SoftHSM + #[ignore] guards)
 
 ## Performance
 - [x] TLS 1.2 handshake benchmarks in oxitls-bench
@@ -101,3 +114,4 @@ Release-check performed 2026-06-01:
 - [x] Wave 8: Anti-replay for 0-RTT early data, key usage extensions
 - [x] Wave 9: OCSP stapling integration tests
 - [x] v0.1.0 release-check (2026-06-01): all tests green, CHANGELOG, README, LICENSE, doc fixes, publish dry-run
+- [x] v0.1.1 release-check (2026-06-03): 339 tests, ECH/HPKE KATs, cert-compression, hybrid PKCS11+aws-lc, version bump

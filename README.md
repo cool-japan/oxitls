@@ -5,10 +5,10 @@ OxiTLS is the COOLJAPAN-blessed Pure Rust TLS transport stack. It provides TLS
 the default-feature path, while still offering opt-in `ffi` adapters for FIPS or
 high-throughput consumers who knowingly accept the C dependency.
 
-## Status: v0.1.0 — Production Ready
+## Status: v0.1.1 — Production Ready
 
-All M0–M5 milestones complete, plus Waves 6–9. **324 tests** passing across 9
-subcrates (~4300 SLOC).
+All M0–M5 milestones complete, plus Waves 6–9 and the v0.1.1 ECH/HPKE feature.
+**423 tests** passing across 9 subcrates (~26 000 SLOC).
 
 ## Why OxiTLS?
 
@@ -119,6 +119,8 @@ let ca = generate_ca("My Root CA", SigningAlgorithm::EcdsaP256)?;
 - Certificate pinning
 - Key logging (`SSLKEYLOGFILE`) for Wireshark debugging
 - Post-quantum key exchange: X25519+ML-KEM-768 (`post-quantum` feature)
+- Encrypted Client Hello — RFC 9180 HPKE base-mode (`ech` feature): GREASE + real ECH config-list; KAT-verified against RFC 9180 Appendix A
+- TLS certificate compression — RFC 8879 zlib via OxiARC Pure Rust (`cert-compression` feature)
 
 ### Certificate Generation (`oxitls-rcgen`)
 - Ed25519, ECDSA-P256, ECDSA-P384, RSA-2048, RSA-4096 key pairs

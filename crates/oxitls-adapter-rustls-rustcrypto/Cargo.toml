@@ -14,6 +14,10 @@ keywords = ["tls", "rustls", "rustcrypto", "pure-rust", "cooljapan"]
 # Namespace reservation for post-quantum key exchange (X25519MLKEM768).
 # Full wiring is deferred to Wave 6 pending rustls KX-group API stabilisation.
 post-quantum = ["dep:ml-kem", "dep:x25519-dalek"]
+# RFC 9180 HPKE base-mode provider for Encrypted Client Hello (ECH).
+ech = ["dep:hkdf", "dep:x25519-dalek", "dep:aes-gcm", "dep:chacha20poly1305", "p256/ecdh"]
+# RFC 8879 TLS certificate compression backed by OxiARC pure-Rust zlib.
+cert-compression = ["dep:oxiarc-deflate"]
 
 [dependencies]
 oxitls-core = { workspace = true }
@@ -38,18 +42,21 @@ x509-parser = { workspace = true }
 x509-cert = { workspace = true }
 ml-kem = { workspace = true, optional = true }
 x25519-dalek = { workspace = true, optional = true }
+hkdf = { workspace = true, optional = true }
+aes-gcm = { workspace = true, optional = true }
+chacha20poly1305 = { workspace = true, optional = true }
 # NOTE: rand_core/rand are intentionally NOT direct deps of this crate. The
 # getrandom-backed `oxitls_core::OsRng` (rand_core 0.6) feeds x25519-dalek's
 # `EphemeralSecret::random_from_rng`; ml-kem's keygen takes no RNG argument.
 getrandom = { workspace = true }
+oxiarc-deflate = { workspace = true, optional = true }
 
 [dev-dependencies]
 rcgen = { workspace = true, features = ["crypto", "pem", "ring"] }
 tokio = { workspace = true, features = ["full", "macros"] }
 oxitls-webpki-roots = { workspace = true }
 sha2 = { version = "0.11", default-features = false, features = ["oid"] }
-# temporarily removed for publish (circular/forward dev-dep); restore after publish complete
-# oxitls-rcgen = { workspace = true }
+oxitls-rcgen = { path = "../oxitls-rcgen" }
 criterion = { workspace = true }
 p256 = { workspace = true }
 rsa = { workspace = true }

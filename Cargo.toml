@@ -16,7 +16,7 @@ exclude = [
 ]
 
 [workspace.package]
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 rust-version = "1.89"
 authors = ["COOLJAPAN OU (Team Kitasan)"]
@@ -26,14 +26,14 @@ description = "OxiTLS is the COOLJAPAN-blessed Pure Rust TLS transport stack."
 
 [workspace.dependencies]
 # crates in this workspace
-oxitls-core = { path = "crates/oxitls-core", version = "0.1.0" }
-oxitls-adapter-rustls-rustcrypto = { path = "crates/oxitls-adapter-rustls-rustcrypto", version = "0.1.0" }
-oxitls-adapter-aws-lc = { path = "crates/oxitls-adapter-aws-lc", version = "0.1.0" }
-oxitls-adapter-pkcs11 = { path = "crates/oxitls-adapter-pkcs11", version = "0.1.0" }
-oxitls-webpki-roots = { path = "crates/oxitls-webpki-roots", version = "0.1.0" }
-oxitls = { path = "crates/oxitls", version = "0.1.0" }
-oxitls-h2 = { path = "crates/oxitls-h2", version = "0.1.0" }
-oxitls-rcgen = { path = "crates/oxitls-rcgen", version = "0.1.0" }
+oxitls-core = { path = "crates/oxitls-core", version = "0.1.1" }
+oxitls-adapter-rustls-rustcrypto = { path = "crates/oxitls-adapter-rustls-rustcrypto", version = "0.1.1" }
+oxitls-adapter-aws-lc = { path = "crates/oxitls-adapter-aws-lc", version = "0.1.1" }
+oxitls-adapter-pkcs11 = { path = "crates/oxitls-adapter-pkcs11", version = "0.1.1" }
+oxitls-webpki-roots = { path = "crates/oxitls-webpki-roots", version = "0.1.1" }
+oxitls = { path = "crates/oxitls", version = "0.1.1" }
+oxitls-h2 = { path = "crates/oxitls-h2", version = "0.1.1" }
+oxitls-rcgen = { path = "crates/oxitls-rcgen", version = "0.1.1" }
 # external -- default-features = false on rustls/tokio-rustls avoids the aws_lc_rs default
 rustls = { version = "0.23", default-features = false, features = ["std", "tls12"] }
 rustls-pemfile = { version = "2.2" }
@@ -62,7 +62,7 @@ http-body-util = { version = "0.1" }
 # Crypto primitives used by oxitls-rcgen for key generation + PKCS#8 export
 # (must stay separate from the oxicrypto workspace — no cross-workspace path dep here)
 ed25519-dalek = { version = "2.2.0", default-features = false, features = ["rand_core", "pkcs8", "alloc"] }
-p256 = { version = "0.14.0-rc.9", default-features = false, features = ["ecdsa", "alloc", "pkcs8"] }
+p256 = { version = "0.14.0-rc.9", default-features = false, features = ["ecdsa", "ecdh", "alloc", "pkcs8"] }
 p384 = { version = "0.14.0-rc.9", default-features = false, features = ["ecdsa", "alloc", "pkcs8"] }
 # RSA: Pure Rust. `sha2` enables the SHA-256 prefix used by PKCS#1 v1.5; `std` provides
 # the Error trait; `pem` adds PEM encoding. pkcs8 is not a feature (it's a transitive
@@ -84,7 +84,10 @@ p12 = { version = "0.6" }
 # feature (required by rsa 0.9 PKCS#1 v1.5 signing). Cargo allows both majors to
 # coexist; each crate adds the version(s) it needs directly.
 # AES-256-GCM for OxiTicketer (no ring)
-aes-gcm = { version = "0.10.3", default-features = false, features = ["aes"] }
+aes-gcm = { version = "0.10.3", default-features = false, features = ["aes", "alloc"] }
+# oxiarc-deflate: pure-Rust RFC 1950 zlib / RFC 1951 DEFLATE — cert compression (RFC 8879)
+oxiarc-deflate = { version = "0.2", default-features = false }
+hkdf = { version = "0.13", default-features = false }
 # ChaCha20-Poly1305 (pure Rust, no ring) — used by bench crate AEAD comparison
 chacha20poly1305 = { version = "0.10", default-features = false, features = ["alloc"] }
 # criterion: benchmark harness (bench-crate only)

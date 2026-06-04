@@ -37,4 +37,21 @@ Feature-gated (`aws-lc` feature, default off) BOUNDED_FFI adapter providing an `
 - [x] Wire into `oxitls` facade: re-export `aws_lc_provider` under `oxitls::fips::provider()` or `oxitls::aws_lc::provider()` behind `aws-lc` feature (~15 SLOC) — Wave 8 (`oxitls::aws_lc::provider()` + `AwsLcTlsProvider` added); 2026-05-29
 - [ ] Add integration with `oxicrypto-adapter-aws-lc`: verify shared `aws-lc-rs` dependency links cleanly when both crates are enabled in the same binary (~20 SLOC link test) — Empirically verified 2026-05-29 (no symbol conflicts, aws-lc-rs 1.17.0 deduped); permanent dev-dep blocked until oxicrypto publishes to a registry (currently unpublished v0.0.0 workspace). Test scaffold with full activation instructions created at `tests/wave8_coexist.rs`.
 - [x] Add integration test with `oxihttp` (if it exists): establish HTTPS connection using aws-lc-rs provider, fetch a resource, verify TLS version in response (~50 SLOC) — Wave 9: `tests/wave9_https.rs`; oxihttp server backed by `TlsConfig::new(aws_lc_server_config(...))`, raw hyper+tokio-rustls client backed by `aws_lc_client_config`; asserts TLS 1.3 + 200 OK; 2026-05-29
-- [ ] Add integration with `oxicrypto-adapter-pkcs11`: PKCS#11 HSM-backed TLS server key (private key on HSM, aws-lc-rs for bulk encryption) via custom `rustls::sign::SigningKey` (~100 SLOC) — Scaffold in `tests/wave10_hybrid_pkcs11.rs` uses a stand-in P256 key; full integration blocked on SoftHSM2 or hardware HSM availability
+- [x] Add integration with PKCS#11 HSM-backed TLS server key (private key on HSM, aws-lc-rs for bulk encryption) (done 2026-06-02)
+  - **Goal:** A real `Pkcs11SigningKey` (SoftHSM2-backed) drives the server's `CertificateVerify` while `aws_lc_provider()` does bulk crypto, replacing the stand-in P-256 signer in `tests/wave10_hybrid_pkcs11.rs`.
+  - **Design:** Extend `tests/wave10_hybrid_pkcs11.rs` — keep the always-on stand-in test; add an `#[ignore]` integration test gated on `SOFTHSM2_MODULE`/`SOFTHSM2_SLOT`/`SOFTHSM2_PIN`/`SOFTHSM2_KEY_LABEL`/`SOFTHSM2_CERT_LABEL` env vars (graceful early-return when unset). Builds `Pkcs11TlsProvider::new(module,slot,pin)` → `signing_key(label)` → `ServerConfig::builder_with_provider(aws_lc_provider()).with_cert_resolver(...)`, runs a loopback TLS 1.3 handshake, asserts success. Adds `oxitls-adapter-pkcs11` as a dev-dependency of this crate (dev-only, pkcs11 doesn't dep aws-lc, no publish-cycle concern).
+  - **Files:** `crates/oxitls-adapter-aws-lc/tests/wave10_hybrid_pkcs11.rs`, `crates/oxitls-adapter-aws-lc/Cargo.toml` (add oxitls-adapter-pkcs11 as dev-dep with features=[pkcs11,aws-lc-bridge]).
+  - **Tests:** The `#[ignore]` HSM hybrid test; CI/no-HSM path stays green via graceful skip.
+  - **Risk:** Cross-crate dev-dep — ensure it doesn't perturb the default feature build. Whole test file already gated `#[cfg(feature="aws-lc")]`.
+
+## Proposed follow-ups
+
+- **oxicrypto-adapter-aws-lc coexist link-test** (`TODO.md` line for this item): The link-cleanliness
+  check is **already empirically verified** (2026-05-29, aws-lc-rs 1.17.0 deduped, zero symbol
+  conflicts). A test scaffold with activation instructions lives in `tests/wave8_coexist.rs`.
+  Making it a permanent dev-dependency is **blocked**: oxicrypto must be on a **registry** (crates.io
+  or equivalent) because oxitls is already released to crates.io (a cross-workspace path/git dep
+  would break `cargo publish`), and the root `Cargo.toml:63` explicitly forbids cross-workspace path
+  deps. User options: (a) wait for oxicrypto to publish to crates.io (recommended); (b) relax the
+  rule and gate a git-source dev-dep behind the existing `oxicrypto-coexist` feature, accepting
+  this cannot appear in a published release. Until then, this item stays `- [ ]`.

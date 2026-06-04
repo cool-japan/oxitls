@@ -5,6 +5,72 @@ All notable changes to OxiTLS will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.1] - 2026-06-04
+
+### Added
+
+#### Encrypted Client Hello / HPKE (`oxitls-adapter-rustls-rustcrypto`, `oxitls`)
+- Full RFC 9180 HPKE implementation (base mode) behind the `ech` feature flag, with two
+  KEM variants (`KemX25519`, `KemP256`) and two AEAD suites (`AeadAes128Gcm`, `AeadChacha20`)
+  — validated against known-answer test vectors.
+- `generate_ech_config_list(suite, config_id, public_name, max_name_length)` — mints a
+  spec-correct `ECHConfigList` (draft-ietf-tls-esni-18 / `0xfe0d`) with self-validation;
+  re-exported from the `oxitls` facade as `oxitls::generate_ech_config_list`.
+- `GeneratedEchConfig` struct exposing `config_list`, `private_key`, `public_key`, and
+  `config_id` fields for deploy-ready ECH key management.
+- `ClientBuilder::with_ech_config_list(bytes)` — enable real ECH with a raw `ECHConfigList`
+  from a DNS HTTPS record (`ech` feature, implies `pure`).
+- `ClientBuilder::with_ech_grease()` — enable RFC 8701 GREASE mode to prevent ECH extension
+  ossification without a real server config.
+- `OxiTlsStream::ech_status()` — inspect the ECH negotiation outcome on a client stream
+  (`ech` feature).
+- `EchConfig`, `EchGreaseConfig`, `EchMode`, `EchStatus` re-exported from `oxitls` under
+  the `ech` feature for consumers who do not depend on `rustls` directly.
+
+#### RFC 8879 Certificate Compression (`oxitls-adapter-rustls-rustcrypto`, `oxitls`)
+- `OxiArcZlibCompressor` / `OxiArcZlibDecompressor` — zero-sized `rustls::CertCompressor` /
+  `CertDecompressor` implementations backed by `oxiarc-deflate` (pure-Rust RFC 1950 zlib);
+  map `Interactive` → level 1 and `Amortized` → level 9.
+- `OXIARC_ZLIB_COMPRESSOR` / `OXIARC_ZLIB_DECOMPRESSOR` static references for direct use.
+- `install_cert_compression_client(config)` / `install_cert_compression_server(config)` —
+  convenience helpers that wire the OxiARC compressors into a `rustls` config in one call.
+- `ClientBuilder::with_cert_compression()` / `ServerBuilder::with_cert_compression()` —
+  high-level builder methods that activate RFC 8879 compression on the produced config
+  (`cert-compression` feature, TLS 1.3 only).
+- New `cert-compression` feature flag in both `oxitls-adapter-rustls-rustcrypto` and `oxitls`.
+- New `ech` feature flag in `oxitls-adapter-rustls-rustcrypto` and `oxitls`.
+
+#### PKCS#11 Hybrid Integration (`oxitls-adapter-aws-lc`)
+- Real-HSM integration test `real_pkcs11_key_with_aws_lc_provider_succeeds` — exercises a
+  full TLS 1.3 loopback handshake where the server's private key never leaves SoftHSM2 while
+  `aws_lc_provider()` handles bulk crypto (marked `#[ignore]`; requires env vars).
+
+#### PKCS#11 Benchmarks (`oxitls-adapter-pkcs11`)
+- `bench_semaphore_acquire` and `bench_pool_sign_throughput` — hardware-free session-pool
+  micro-benchmarks measuring `tokio::sync::Semaphore` acquire/release latency and concurrent
+  P-256 sign throughput at pool capacities 1, 4, and 16.
+- `bench_hsm_pool_acquire` — real HSM pool acquire bench (compiled under `pkcs11` feature;
+  skipped gracefully when `SOFTHSM2_MODULE` is absent).
+- `bench_sign_latency` and `bench_pool_contention` — software ECDSA-P256 baseline always
+  measured; HSM variants active only with the `pkcs11` feature and `SOFTHSM2_MODULE` set.
+
+#### Server Ticketer Rotation (`oxitls`)
+- `ServerBuilder::with_ticketer_rotation_interval(duration)` — installs an `OxiTicketer`
+  that spawns a background tokio task to rotate session-ticket keys on the given interval.
+
+### Changed
+- `p256` dependency: `ecdh` feature added (required by DHKEM P-256 in HPKE).
+- `aes-gcm` dependency: `alloc` feature added (required by HPKE AEAD seal/open).
+- `oxiarc-deflate 0.2` and `hkdf 0.13` added as optional workspace dependencies (used by
+  `cert-compression` and `ech` features respectively).
+- `oxitls-adapter-rustls-rustcrypto` and `oxitls-adapter-aws-lc` dev-dependencies restored
+  post-publish: `oxitls-rcgen`, `oxihttp-server`, `oxitls-adapter-pkcs11` paths re-enabled.
+
+### Fixed
+- `clone_private_key_der` in `oxitls` client path now returns `Result<PrivateKeyDer, TlsError>`
+  instead of panicking on unrecognised `PrivateKeyDer` variants (no-unwrap policy); all four
+  `ClientBuilder::build()` call sites updated accordingly.
+
 ## [0.1.0] - 2026-06-01
 
 ### Added
@@ -92,7 +158,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Wave 9: OCSP stapling integration tests
 
 ### Test Coverage
-- 324 tests across all crates
+- 423 tests across all crates (--all-features)
 - Loopback handshake tests for all key types (Ed25519, P-256, P-384, RSA-2048, RSA-4096)
 - 3-level CA chain validation tests
 - CSR generation and signing round-trip tests
@@ -108,4 +174,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - PKCS#11 tests require SoftHSM2 and are marked `#[ignore]` by default
 - `oxitls-bench` has `publish = false` (internal benchmarking tool)
 
+[0.1.1]: https://github.com/cool-japan/oxitls/releases/tag/v0.1.1
 [0.1.0]: https://github.com/cool-japan/oxitls/releases/tag/v0.1.0

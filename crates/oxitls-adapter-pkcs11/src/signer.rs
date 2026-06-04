@@ -233,7 +233,8 @@ enum SigningKeyBackend {
 
 /// A PKCS#11-backed [`rustls::sign::SigningKey`].
 ///
-/// Supports two construction modes — see [`SigningKeyBackend`].
+/// Supports two construction modes: pool-backed (preferred) via [`Self::new`],
+/// and direct module-loading via [`Self::new_direct`].
 #[derive(Debug)]
 pub struct Pkcs11SigningKey {
     backend: SigningKeyBackend,

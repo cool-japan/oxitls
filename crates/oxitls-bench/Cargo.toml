@@ -159,7 +159,7 @@ sha2                             = { version = "0.11", default-features = false,
 ring         = { version = "0.17" }
 aws-lc-rs    = { version = "1" }
 # HTTP latency bench: oxihttp (server + TLS) — dev-only, must not appear on normal edge
-# oxihttp      = { path = "../../../oxihttp/crates/oxihttp", default-features = false, features = ["tls"] }  # temporarily removed for publish (cross-workspace path dep; oxihttp published after oxitls); restore after publish complete
-# hyper         = { workspace = true }  # temporarily removed (needed only for oxihttp integration bench)
-# hyper-util    = { workspace = true }  # temporarily removed
-# http-body-util = { workspace = true }  # temporarily removed
+oxihttp      = { version = "0.1.0", default-features = false, features = ["tls"] }
+hyper         = { workspace = true }
+hyper-util    = { workspace = true }
+http-body-util = { workspace = true }

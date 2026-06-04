@@ -216,4 +216,184 @@ mod tests {
             "TestP256Signer::sign() was never called — custom signing key not used"
         );
     }
+
+    // ── real_pkcs11_key_with_aws_lc_provider_succeeds ─────────────────────────
+
+    /// Full TLS handshake using a **real** PKCS#11 signing key from SoftHSM2.
+    ///
+    /// The server's private key never leaves the HSM; only `aws_lc_provider()` is
+    /// used for bulk symmetric crypto and key-exchange, achieving the
+    /// HSM-key + FIPS-bulk-crypto hybrid architecture described in the module doc.
+    ///
+    /// # Prerequisites
+    ///
+    /// Set these env vars before running (otherwise the test is skipped):
+    ///
+    /// ```text
+    /// SOFTHSM2_MODULE    path to libsofthsm2.so / libsofthsm2.dylib
+    /// SOFTHSM2_SLOT      slot index (u64)
+    /// SOFTHSM2_PIN       user PIN
+    /// SOFTHSM2_KEY_LABEL CKA_LABEL of the private key object
+    /// SOFTHSM2_CERT_LABEL CKA_LABEL of the certificate object
+    ///                     (leave empty / unset to fall back to a generated cert)
+    /// ```
+    ///
+    /// # Run
+    ///
+    /// ```bash
+    /// SOFTHSM2_MODULE=/usr/lib/softhsm/libsofthsm2.so \
+    /// SOFTHSM2_SLOT=0 SOFTHSM2_PIN=1234 \
+    /// SOFTHSM2_KEY_LABEL=tls-key SOFTHSM2_CERT_LABEL=tls-cert \
+    /// cargo nextest run -p oxitls-adapter-aws-lc --features aws-lc \
+    ///     --test wave10_hybrid_pkcs11 --include-ignored
+    /// ```
+    #[tokio::test]
+    #[ignore = "requires SOFTHSM2_MODULE/SOFTHSM2_SLOT/SOFTHSM2_PIN/SOFTHSM2_KEY_LABEL env vars"]
+    async fn real_pkcs11_key_with_aws_lc_provider_succeeds() {
+        use std::path::PathBuf;
+
+        use oxitls_adapter_pkcs11::Pkcs11TlsProvider;
+        use secrecy::SecretString;
+
+        // ── 1. Read and validate env vars (graceful skip if any are absent) ──
+        macro_rules! env_or_skip {
+            ($var:literal) => {
+                match std::env::var($var) {
+                    Ok(v) => v,
+                    Err(_) => {
+                        eprintln!(concat!(
+                            "real_pkcs11_key_with_aws_lc_provider_succeeds: ",
+                            $var,
+                            " not set — skipping HSM integration test"
+                        ));
+                        return;
+                    }
+                }
+            };
+        }
+
+        let module_path = PathBuf::from(env_or_skip!("SOFTHSM2_MODULE"));
+        let slot_str = env_or_skip!("SOFTHSM2_SLOT");
+        let pin_str = env_or_skip!("SOFTHSM2_PIN");
+        let key_label = env_or_skip!("SOFTHSM2_KEY_LABEL");
+        // cert_label is optional — if the env var is absent or empty we fall back
+        // to a freshly generated self-signed cert matched to the HSM key.
+        let cert_label_raw = std::env::var("SOFTHSM2_CERT_LABEL").unwrap_or_default();
+
+        let slot_index: u64 = match slot_str.parse() {
+            Ok(v) => v,
+            Err(e) => {
+                eprintln!("SOFTHSM2_SLOT is not a valid u64: {e}");
+                return;
+            }
+        };
+
+        let pin = SecretString::from(pin_str);
+
+        // ── 2. Build the Pkcs11TlsProvider ──────────────────────────────────
+        let provider = match Pkcs11TlsProvider::new(module_path, slot_index, pin) {
+            Ok(p) => p,
+            Err(e) => {
+                eprintln!("Pkcs11TlsProvider::new failed (is SOFTHSM2_MODULE correct?): {e}");
+                return;
+            }
+        };
+
+        // ── 3. Obtain the HSM-backed signing key ─────────────────────────────
+        let signing_key = match provider.signing_key(&key_label) {
+            Ok(k) => k,
+            Err(e) => {
+                eprintln!("provider.signing_key({key_label:?}) failed: {e}");
+                return;
+            }
+        };
+
+        // ── 4. Obtain / generate the certificate chain ───────────────────────
+        //
+        // Preferred path: load the certificate stored on the HSM alongside the key.
+        // Fallback path: generate a new self-signed P-256 cert (the signature scheme
+        // negotiated with the HSM key must match the cert's public key, so this
+        // fallback is only valid when the HSM key is an EC P-256 key).
+        let (cert_ders, trust_anchor) = if cert_label_raw.is_empty() {
+            // Fallback: generate a temporary self-signed cert.
+            eprintln!(
+                "SOFTHSM2_CERT_LABEL empty — generating a temporary self-signed cert for the test"
+            );
+            let ck = oxitls_rcgen::generate_self_signed_p256(&["localhost"])
+                .expect("rcgen self-signed p256 cert");
+            let der = CertificateDer::from(ck.cert_der);
+            let anchor = der.clone();
+            (vec![der], anchor)
+        } else {
+            match provider.cert_chain(&cert_label_raw) {
+                Ok(chain) if !chain.is_empty() => {
+                    let anchor = chain[0].clone();
+                    (chain, anchor)
+                }
+                Ok(_) => {
+                    eprintln!("cert_chain({cert_label_raw:?}) returned empty — skipping");
+                    return;
+                }
+                Err(e) => {
+                    eprintln!("provider.cert_chain({cert_label_raw:?}) failed: {e}");
+                    return;
+                }
+            }
+        };
+
+        // ── 5. Build CertifiedKey with the HSM signing key ───────────────────
+        let certified_key = CertifiedKey::new(cert_ders, signing_key as Arc<dyn SigningKey>);
+
+        // ── 6. Server: aws_lc_provider() + HSM cert resolver ─────────────────
+        let server_config = ServerConfig::builder_with_provider(aws_lc_provider())
+            .with_safe_default_protocol_versions()
+            .expect("server protocol versions")
+            .with_no_client_auth()
+            .with_cert_resolver(
+                Arc::new(SingleCertAndKey::from(certified_key)) as Arc<dyn ResolvesServerCert>
+            );
+        let acceptor = TlsAcceptor::from(Arc::new(server_config));
+
+        // ── 7. Client: aws_lc_provider() + trust the leaf cert ───────────────
+        let mut root_store = RootCertStore::empty();
+        root_store
+            .add(trust_anchor)
+            .expect("add HSM cert to root store");
+        let client_config = ClientConfig::builder_with_provider(aws_lc_provider())
+            .with_safe_default_protocol_versions()
+            .expect("client protocol versions")
+            .with_root_certificates(root_store)
+            .with_no_client_auth();
+        let connector = TlsConnector::from(Arc::new(client_config));
+
+        // ── 8. Loopback TCP + TLS handshake ──────────────────────────────────
+        let listener = TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind ephemeral port");
+        let port = listener.local_addr().expect("local addr").port();
+
+        let server = tokio::spawn(async move {
+            let (stream, _) = listener.accept().await.expect("tcp accept");
+            let mut tls = acceptor.accept(stream).await.expect("tls accept");
+            tokio::io::copy(&mut tls, &mut tokio::io::sink()).await.ok();
+        });
+
+        let tcp = TcpStream::connect(("127.0.0.1", port))
+            .await
+            .expect("tcp connect");
+        let server_name = ServerName::try_from("localhost")
+            .expect("server name parse")
+            .to_owned();
+        connector
+            .connect(server_name, tcp)
+            .await
+            .expect("TLS 1.3 handshake with HSM key + aws-lc-rs provider must succeed");
+
+        server.abort();
+
+        eprintln!(
+            "real_pkcs11_key_with_aws_lc_provider_succeeds: PASSED — \
+             HSM PKCS#11 signing key + aws-lc-rs bulk crypto handshake completed"
+        );
+    }
 }

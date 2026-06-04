@@ -47,14 +47,18 @@ rustls       = { workspace = true }
 rustls-pki-types = { workspace = true }
 tokio        = { workspace = true, features = ["full", "macros", "test-util"] }
 tokio-rustls = { workspace = true }
-# temporarily removed for publish (circular/forward dev-dep); restore after publish complete
-# oxitls-adapter-rustls-rustcrypto = { workspace = true }
-# oxitls-rcgen = { workspace = true }
+oxitls-adapter-rustls-rustcrypto = { path = "../oxitls-adapter-rustls-rustcrypto" }
+oxitls-rcgen = { path = "../oxitls-rcgen" }
 aws-lc-rs    = { workspace = true }
 p256         = { workspace = true }
 # wave9 HTTPS integration test: oxihttp server + raw hyper client, both aws-lc-rs backed
-# oxihttp-server = { path = "../../../oxihttp/crates/oxihttp-server", features = ["tls"] }  # temporarily removed for publish (cross-workspace path dep; oxihttp published after oxitls); restore after publish complete
-# hyper          = { workspace = true }  # temporarily removed (needed only for oxihttp-server integration test)
-# hyper-util     = { workspace = true }  # temporarily removed
-# http-body-util = { workspace = true }  # temporarily removed
-# bytes          = { workspace = true }  # temporarily removed
+# NOTE: oxihttp-server 0.1.0 pins oxitls 0.1.0; re-enable once oxihttp publishes 0.1.1
+# oxihttp-server = { version = "0.1.0", features = ["tls"] }
+hyper          = { workspace = true }
+hyper-util     = { workspace = true }
+http-body-util = { workspace = true }
+bytes          = { workspace = true }
+# wave10 PKCS#11 hybrid integration test: real SoftHSM2 key + aws-lc-rs bulk crypto
+# dev-deps with path = are stripped on cargo publish, so this is safe for a published crate.
+oxitls-adapter-pkcs11 = { path = "../oxitls-adapter-pkcs11", features = ["pkcs11"] }
+secrecy = { version = "0.10" }

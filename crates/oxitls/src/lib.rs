@@ -72,6 +72,21 @@ pub use rustls::SupportedProtocolVersion;
 #[cfg(feature = "pure")]
 pub use rustls::pki_types::SubjectPublicKeyInfoDer;
 
+/// ECH (Encrypted Client Hello) types for the `ech` feature.
+///
+/// Enables use of ECH config lists, GREASE mode, and status inspection without
+/// importing `rustls` directly.
+#[cfg(feature = "ech")]
+pub use rustls::client::{EchConfig, EchGreaseConfig, EchMode, EchStatus};
+
+/// ECHConfigList generation for the `ech` feature.
+///
+/// [`generate_ech_config_list`] mints a spec-correct ECHConfigList from a fresh
+/// HPKE keypair. The returned [`GeneratedEchConfig`] contains both the publishable
+/// config bytes (for DNS/HTTPS) and the operator's private key.
+#[cfg(feature = "ech")]
+pub use oxitls_adapter_rustls_rustcrypto::{generate_ech_config_list, GeneratedEchConfig};
+
 #[cfg(feature = "pure")]
 pub use tls13::server::{OcspResponseResolver, StaticOcspResolver};
 

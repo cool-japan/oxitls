@@ -35,6 +35,8 @@ criterion = { workspace = true }
 tokio = { workspace = true }
 cryptoki = { workspace = true }
 p256 = { workspace = true, features = ["ecdsa"] }
+secrecy = { workspace = true }
+getrandom = { workspace = true }
 
 [[bench]]
 name = "pkcs11_bench"

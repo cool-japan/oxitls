@@ -85,6 +85,20 @@ impl<S: AsyncRead + AsyncWrite + Unpin> OxiTlsStream<S> {
         }
     }
 
+    /// Returns the ECH status of this TLS connection (client-side only).
+    ///
+    /// Returns `None` if this is a server-side stream or if the `ech` feature is
+    /// not enabled at compile time.
+    ///
+    /// Requires the `ech` feature.
+    #[cfg(feature = "ech")]
+    pub fn ech_status(&self) -> Option<tokio_rustls::rustls::client::EchStatus> {
+        match &self.inner {
+            Inner::Client(s) => Some(s.get_ref().1.ech_status()),
+            Inner::Server(_) => None,
+        }
+    }
+
     /// Wrap a client-side TLS stream with optional connection metadata.
     pub fn from_client(
         stream: tokio_rustls::client::TlsStream<S>,

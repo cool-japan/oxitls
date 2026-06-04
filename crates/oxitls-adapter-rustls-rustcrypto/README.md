@@ -11,10 +11,10 @@ This crate provides everything needed to stand up a TLS client or server on the 
 
 ```toml
 [dependencies]
-oxitls-adapter-rustls-rustcrypto = "0.1.0"
+oxitls-adapter-rustls-rustcrypto = "0.1.1"
 
 # With the post-quantum hybrid KX namespace (X25519MLKEM768):
-oxitls-adapter-rustls-rustcrypto = { version = "0.1.0", features = ["post-quantum"] }
+oxitls-adapter-rustls-rustcrypto = { version = "0.1.1", features = ["post-quantum"] }
 ```
 
 Most users should depend on the [`oxitls`](https://crates.io/crates/oxitls) facade instead, which re-exports this crate behind its default `pure` feature.
@@ -172,6 +172,18 @@ Top-level re-exports for convenience: `known_ct_logs`, `OcspClientPolicy`, `CtKe
 
 The hybrid group concatenates an ML-KEM-768 share with an X25519 share (PQ-first) and exposes the classical X25519 component via `hybrid_component()` so non-PQ servers avoid a HelloRetryRequest. Backed by the `ml-kem` and `x25519-dalek` crates — still 100% Pure Rust.
 
+### HPKE / Encrypted Client Hello *(feature `ech`)*
+
+RFC 9180 base-mode HPKE provider, byte-exact against RFC 9180 Appendix A KAT vectors.
+
+| Item | Description |
+|------|-------------|
+| `pure_hpke_suites() -> &'static [&'static dyn rustls::crypto::hpke::Hpke]` | Four suite statics: X25519/P-256 × AES-128-GCM/ChaCha20Poly1305 |
+| `generate_ech_config_list(suite, config_id, public_name, max_name_len)` | Mint a publishable ECHConfigList from a fresh HPKE keypair; returns `GeneratedEchConfig { config_list, private_key }` |
+| `GeneratedEchConfig` | Holds the publishable `config_list: Vec<u8>` and the operator's long-term `private_key` |
+
+Internal modules: `hpke::kem` (DHKEM Encap/Decap over X25519 and P-256), `hpke::kdf` (LabeledExtract/LabeledExpand, HKDF-SHA256/SHA384), `hpke::aead` (Context seal/open, nonce management), `hpke::ech_config` (ECHConfigList serialisation), `hpke::vectors` (RFC 9180 KAT constants).
+
 ### Re-exported types
 
 `ClientConfig`, `RootCertStore`, `ServerConfig` (from `rustls`); `CertificateDer`, `PrivateKeyDer`, `ServerName` (from `rustls-pki-types`); `TlsError` (from `oxitls-core`).
@@ -181,7 +193,9 @@ The hybrid group concatenates an ML-KEM-768 share with an X25519 share (PQ-first
 | Feature | Default | Pure Rust | Description |
 |---------|---------|-----------|-------------|
 | *(none)* | ✅ | ✅ | Pure-Rust rustls + RustCrypto provider, builders, verifiers |
-| `post-quantum` | — | ✅ | Compiles the `kx` module and `X25519MLKEM768` / `pure_provider_with_pq()` (namespace reservation; full wiring lands once the rustls KX-group API stabilises) |
+| `post-quantum` | — | ✅ | X25519MLKEM768 hybrid KX group (`kx` module, `pure_provider_with_pq()`) |
+| `ech` | — | ✅ | RFC 9180 HPKE base-mode for ECH: `pure_hpke_suites()`, `generate_ech_config_list(..)`; 4 suites (X25519/P-256 × AES-128-GCM/ChaCha20Poly1305); KAT-verified against RFC 9180 Appendix A |
+| `cert-compression` | — | ✅ | RFC 8879 TLS certificate compression via OxiARC pure-Rust zlib (oxiarc-deflate) |
 
 ## Error type
 

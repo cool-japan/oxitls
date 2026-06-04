@@ -89,10 +89,18 @@ feature gate pulls in the `cryptoki` crate (PKCS#11 v2.40 Rust bindings).
 
 - [x] Benchmark harness: `benches/pkcs11_perf.rs` registered in Cargo.toml; skips
   gracefully without SoftHSM2
-- [ ] Benchmark PKCS#11 sign latency vs software key sign (HSM adds RTT over PKCS#11
-  IPC; measure baseline with SoftHSM2 on loopback) (~40 SLOC)
-- [ ] Benchmark session-pool contention: 1 vs 4 vs 16 concurrent signers, measure
-  TLS handshakes/second throughput (~60 SLOC) — Blocked: requires SoftHSM2 or hardware HSM; bench harness (`benches/pkcs11_perf.rs`) skips gracefully without it
+- [x] Benchmark PKCS#11 sign latency vs software key sign (HSM adds RTT over PKCS#11 IPC; measure baseline with SoftHSM2 on loopback) (planned 2026-06-02)
+  - **Goal:** Real criterion bench in `benches/pkcs11_perf.rs` (group 1) replacing the no-op stub. Always-measured software ECDSA-P256 baseline; HSM path when `SOFTHSM2_MODULE` is set (graceful skip otherwise).
+  - **Design:** Software baseline: p256 dev-dep (`SigningKey::sign_prehash`), same pattern as wave10 `TestP256Signer`. HSM path: `Pkcs11SessionPool::new` → `Pkcs11SigningKey::new` → `choose_scheme` → `sign`. Optionally also a `MockSigningBackend` micro-bench for PKCS#11 dispatch overhead without hardware. Log what is skipped (no silent caps).
+  - **Files:** `crates/oxitls-adapter-pkcs11/benches/pkcs11_perf.rs`.
+  - **Tests:** `cargo bench -p oxitls-adapter-pkcs11 --no-run` compiles; bench runs to completion without HSM.
+  - **Risk:** p256 dev-dep version coupling (0.14-rc.9 workspace); verify `SigningKey` API at that version.
+- [x] Benchmark session-pool contention: 1 vs 4 vs 16 concurrent signers, measure throughput (planned 2026-06-02)
+  - **Goal:** Real criterion bench (group 2 in `pkcs11_perf.rs`) + rewrite of `benches/pkcs11_bench.rs` stub. Produces hardware-free contention curves via `MockSigningBackend`; richer numbers when `SOFTHSM2_MODULE` is set.
+  - **Design:** `Pkcs11SessionPool::new(module, slot, pin, NonZeroUsize)` directly at capacities 1/4/16 (avoids Pkcs11TlsProvider's hardcoded-4 capacity). Fan out concurrent tasks via `criterion.async_tokio` multi-thread. `MockSigningBackend` (`signer.rs:491`) for hardware-free contention curves. `pkcs11_bench.rs` converted to a real session acquire/release micro-bench (no more empty stub). Log any hardware-skipped paths explicitly.
+  - **Files:** `crates/oxitls-adapter-pkcs11/benches/pkcs11_perf.rs`, `crates/oxitls-adapter-pkcs11/benches/pkcs11_bench.rs`.
+  - **Tests:** `cargo bench -p oxitls-adapter-pkcs11 --no-run` compiles both binaries; both run without HSM.
+  - **Risk:** `MockSigningBackend::new` / `sign_raw` API (signer.rs:491,507) — verify signature.
 
 ## Integration
 

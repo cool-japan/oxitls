@@ -23,6 +23,24 @@ pub(crate) mod keylog_bridge;
 #[cfg(feature = "post-quantum")]
 pub mod kx;
 
+/// HPKE (RFC 9180) base-mode provider for Encrypted Client Hello.
+///
+/// Only compiled when the `ech` feature is enabled.
+#[cfg(feature = "ech")]
+pub mod hpke;
+
+/// RFC 8879 TLS certificate compression backed by OxiARC pure-Rust zlib.
+///
+/// Only compiled when the `cert-compression` feature is enabled.
+#[cfg(feature = "cert-compression")]
+pub mod cert_compression;
+
+#[cfg(feature = "cert-compression")]
+pub use cert_compression::{
+    install_cert_compression_client, install_cert_compression_server, OXIARC_ZLIB_COMPRESSOR,
+    OXIARC_ZLIB_DECOMPRESSOR,
+};
+
 /// Fluent builders for `ClientConfig` and `ServerConfig`.
 pub mod client_builder;
 pub mod server_builder;
@@ -35,6 +53,19 @@ pub use server_builder::RustcryptoServerConfigBuilder;
 
 #[cfg(feature = "post-quantum")]
 pub use kx::X25519MLKEM768;
+
+#[cfg(feature = "ech")]
+pub use hpke::pure_hpke_suites;
+
+#[cfg(feature = "ech")]
+pub use hpke::{
+    AeadAes128Gcm, AeadChacha20, HpkeOpenerCtx, HpkeSealerCtx, KemP256, KemX25519,
+    HPKE_P256_HKDF_SHA256_AES128GCM, HPKE_P256_HKDF_SHA256_CHACHA20,
+    HPKE_X25519_HKDF_SHA256_AES128GCM, HPKE_X25519_HKDF_SHA256_CHACHA20,
+};
+
+#[cfg(feature = "ech")]
+pub use hpke::ech_config::{generate_ech_config_list, GeneratedEchConfig};
 
 // ── Verifier re-exports ───────────────────────────────────────────────────────
 

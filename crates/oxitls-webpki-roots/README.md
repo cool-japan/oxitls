@@ -11,14 +11,14 @@ The default build is **100% Pure Rust** (`#![forbid(unsafe_code)]`): the Mozilla
 
 ```toml
 [dependencies]
-oxitls-webpki-roots = "0.1.0"
+oxitls-webpki-roots = "0.1.1"
 ```
 
 Via the façade (this crate is the default `webpki-roots` feature of `oxitls`):
 
 ```toml
 [dependencies]
-oxitls = { version = "0.1.0", features = ["webpki-roots"] }
+oxitls = { version = "0.1.1", features = ["webpki-roots"] }
 ```
 
 ## Quick Start

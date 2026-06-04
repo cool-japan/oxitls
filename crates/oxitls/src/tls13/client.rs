@@ -121,6 +121,20 @@ pub struct ClientBuilder {
     /// values.
     #[cfg(feature = "pure")]
     server_raw_public_keys: Option<Vec<rustls::pki_types::SubjectPublicKeyInfoDer<'static>>>,
+    /// ECH mode to use in the TLS 1.3 handshake.
+    ///
+    /// When set, `build()` calls `with_ech(mode)` on the rustls builder instead of
+    /// `with_protocol_versions`, which implicitly forces TLS 1.3.
+    ///
+    /// Requires the `ech` feature.
+    #[cfg(feature = "ech")]
+    ech_mode: Option<rustls::client::EchMode>,
+    /// Enable RFC 8879 TLS certificate compression (zlib, OxiARC).
+    ///
+    /// When `true`, `build()` installs the OxiARC zlib compressor/decompressor
+    /// on the produced `ClientConfig`.  Requires the `cert-compression` feature.
+    #[cfg(feature = "cert-compression")]
+    enable_cert_compression: bool,
 }
 
 impl ClientBuilder {
@@ -150,6 +164,10 @@ impl ClientBuilder {
             provider: None,
             #[cfg(feature = "pure")]
             server_raw_public_keys: None,
+            #[cfg(feature = "ech")]
+            ech_mode: None,
+            #[cfg(feature = "cert-compression")]
+            enable_cert_compression: false,
         }
     }
 
@@ -476,6 +494,64 @@ impl ClientBuilder {
         self
     }
 
+    /// Enable Encrypted Client Hello (ECH) by providing a raw `ECHConfigList`.
+    ///
+    /// The bytes should come from a DNS-over-HTTPS HTTPS record's `ech` parameter,
+    /// base64-decoded.  A compatible HPKE suite from [`pure_hpke_suites`] is selected
+    /// automatically.
+    ///
+    /// Requires the `ech` feature.
+    ///
+    /// # Errors
+    /// Returns [`TlsError::InvalidConfig`] if no ECH config in the list is compatible
+    /// with the available HPKE suites (suite mismatch, malformed list, etc.).
+    ///
+    /// [`pure_hpke_suites`]: oxitls_adapter_rustls_rustcrypto::pure_hpke_suites
+    #[cfg(feature = "ech")]
+    pub fn with_ech_config_list(mut self, ech_config_list: Vec<u8>) -> Result<Self, TlsError> {
+        use rustls::client::EchConfig;
+        use rustls::pki_types::EchConfigListBytes;
+        let suites = oxitls_adapter_rustls_rustcrypto::pure_hpke_suites();
+        let cfg = EchConfig::new(EchConfigListBytes::from(ech_config_list), suites)
+            .map_err(|e| TlsError::InvalidConfig(format!("ECH config: {e}")))?;
+        self.ech_mode = Some(rustls::client::EchMode::Enable(cfg));
+        Ok(self)
+    }
+
+    /// Enable ECH GREASE mode (RFC 8701 anti-ossification measure).
+    ///
+    /// When no real ECH config is available but the caller still wants to send
+    /// an ECH extension to avoid ossification, GREASE mode sends a random,
+    /// dummy ECH extension that no server will accept.
+    ///
+    /// Requires the `ech` feature.
+    #[cfg(feature = "ech")]
+    pub fn with_ech_grease(mut self) -> Self {
+        // Pick the first suite (X25519/SHA256/AES-128-GCM) for the placeholder key.
+        let suite = oxitls_adapter_rustls_rustcrypto::pure_hpke_suites()[0];
+        // Generate a throwaway keypair for the placeholder public key.
+        let placeholder_key = suite
+            .generate_key_pair()
+            .map(|(pk, _sk)| pk)
+            .unwrap_or_else(|_| rustls::crypto::hpke::HpkePublicKey(vec![0u8; 32]));
+        let grease = rustls::client::EchGreaseConfig::new(suite, placeholder_key);
+        self.ech_mode = Some(rustls::client::EchMode::Grease(grease));
+        self
+    }
+
+    /// Enable RFC 8879 TLS certificate compression using OxiARC pure-Rust zlib.
+    ///
+    /// When enabled, the produced `ClientConfig` will have its `cert_compressors`
+    /// and `cert_decompressors` set to the OxiARC zlib implementations.
+    /// Cert compression only applies to TLS 1.3; rustls ignores it for TLS 1.2.
+    ///
+    /// Requires the `cert-compression` feature.
+    #[cfg(feature = "cert-compression")]
+    pub fn with_cert_compression(mut self) -> Self {
+        self.enable_cert_compression = true;
+        self
+    }
+
     /// Build the final [`ClientConfig`].
     ///
     /// # Errors
@@ -539,6 +615,17 @@ impl ClientBuilder {
             None => &[&rustls::version::TLS13],
         };
 
+        #[cfg(feature = "ech")]
+        let builder_mid = if let Some(ech_mode) = self.ech_mode {
+            ClientConfig::builder_with_provider(provider.clone())
+                .with_ech(ech_mode)
+                .map_err(|e| TlsError::InvalidConfig(e.to_string()))?
+        } else {
+            ClientConfig::builder_with_provider(provider.clone())
+                .with_protocol_versions(versions)
+                .map_err(|e| TlsError::InvalidConfig(e.to_string()))?
+        };
+        #[cfg(not(feature = "ech"))]
         let builder_mid = ClientConfig::builder_with_provider(provider.clone())
             .with_protocol_versions(versions)
             .map_err(|e| TlsError::InvalidConfig(e.to_string()))?;
@@ -576,8 +663,10 @@ impl ClientBuilder {
 
             let mut config = match self.client_cert {
                 Some((certs, key)) => {
-                    let key =
-                        Arc::try_unwrap(key).unwrap_or_else(|arc| clone_private_key_der(&arc));
+                    let key = match Arc::try_unwrap(key) {
+                        Ok(k) => k,
+                        Err(arc) => clone_private_key_der(&arc)?,
+                    };
                     with_verifier
                         .with_client_auth_cert(certs, key)
                         .map_err(|e| TlsError::InvalidConfig(e.to_string()))?
@@ -609,8 +698,10 @@ impl ClientBuilder {
 
             match self.client_cert {
                 Some((certs, key)) => {
-                    let key =
-                        Arc::try_unwrap(key).unwrap_or_else(|arc| clone_private_key_der(&arc));
+                    let key = match Arc::try_unwrap(key) {
+                        Ok(k) => k,
+                        Err(arc) => clone_private_key_der(&arc)?,
+                    };
                     with_verifier.with_client_cert_resolver(Arc::new(
                         SingleClientCertResolver::new(certs, key)?,
                     ))
@@ -653,8 +744,10 @@ impl ClientBuilder {
 
             match self.client_cert {
                 Some((certs, key)) => {
-                    let key =
-                        Arc::try_unwrap(key).unwrap_or_else(|arc| clone_private_key_der(&arc));
+                    let key = match Arc::try_unwrap(key) {
+                        Ok(k) => k,
+                        Err(arc) => clone_private_key_der(&arc)?,
+                    };
                     with_verifier
                         .with_client_auth_cert(certs, key)
                         .map_err(|e| TlsError::InvalidConfig(e.to_string()))?
@@ -748,8 +841,10 @@ impl ClientBuilder {
 
             match self.client_cert {
                 Some((certs, key)) => {
-                    let key =
-                        Arc::try_unwrap(key).unwrap_or_else(|arc| clone_private_key_der(&arc));
+                    let key = match Arc::try_unwrap(key) {
+                        Ok(k) => k,
+                        Err(arc) => clone_private_key_der(&arc)?,
+                    };
                     with_roots
                         .with_client_auth_cert(certs, key)
                         .map_err(|e| TlsError::InvalidConfig(e.to_string()))?
@@ -783,6 +878,12 @@ impl ClientBuilder {
         // `ClientConfig::enable_early_data` is a public bool field in rustls 0.23.
         if self.enable_early_data {
             config.enable_early_data = true;
+        }
+
+        // RFC 8879 certificate compression (TLS 1.3 only).
+        #[cfg(feature = "cert-compression")]
+        if self.enable_cert_compression {
+            oxitls_adapter_rustls_rustcrypto::install_cert_compression_client(&mut config);
         }
 
         Ok(config)
@@ -856,12 +957,16 @@ fn hex_bytes(bytes: &[u8]) -> String {
 // ── PrivateKeyDer clone helper ────────────────────────────────────────────────
 
 /// Clone a [`PrivateKeyDer`] (not natively Clone in rustls-pki-types).
-fn clone_private_key_der(key: &PrivateKeyDer<'static>) -> PrivateKeyDer<'static> {
+///
+/// Returns an error for any unrecognised variant rather than panicking.
+fn clone_private_key_der(key: &PrivateKeyDer<'static>) -> Result<PrivateKeyDer<'static>, TlsError> {
     match key {
-        PrivateKeyDer::Pkcs1(k) => PrivateKeyDer::Pkcs1(k.secret_pkcs1_der().to_vec().into()),
-        PrivateKeyDer::Sec1(k) => PrivateKeyDer::Sec1(k.secret_sec1_der().to_vec().into()),
-        PrivateKeyDer::Pkcs8(k) => PrivateKeyDer::Pkcs8(k.secret_pkcs8_der().to_vec().into()),
-        _ => panic!("unsupported PrivateKeyDer variant for cloning"),
+        PrivateKeyDer::Pkcs1(k) => Ok(PrivateKeyDer::Pkcs1(k.secret_pkcs1_der().to_vec().into())),
+        PrivateKeyDer::Sec1(k) => Ok(PrivateKeyDer::Sec1(k.secret_sec1_der().to_vec().into())),
+        PrivateKeyDer::Pkcs8(k) => Ok(PrivateKeyDer::Pkcs8(k.secret_pkcs8_der().to_vec().into())),
+        _ => Err(TlsError::InvalidConfig(
+            "unsupported PrivateKeyDer variant for cloning".to_string(),
+        )),
     }
 }
 

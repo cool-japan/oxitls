@@ -43,7 +43,7 @@ harness = false
 [dev-dependencies]
 criterion    = { workspace = true }
 # Tests wire the generated cert straight into a rustls handshake
-oxitls-adapter-rustls-rustcrypto = { workspace = true }
+oxitls-adapter-rustls-rustcrypto = { path = "../oxitls-adapter-rustls-rustcrypto" }
 rustls       = { workspace = true }
 rustls-pki-types = { workspace = true }
 tokio        = { workspace = true, features = ["full", "macros"] }
