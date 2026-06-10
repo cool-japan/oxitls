@@ -16,7 +16,7 @@ exclude = [
 ]
 
 [workspace.package]
-version = "0.1.1"
+version = "0.1.2"
 edition = "2021"
 rust-version = "1.89"
 authors = ["COOLJAPAN OU (Team Kitasan)"]
@@ -26,14 +26,14 @@ description = "OxiTLS is the COOLJAPAN-blessed Pure Rust TLS transport stack."
 
 [workspace.dependencies]
 # crates in this workspace
-oxitls-core = { path = "crates/oxitls-core", version = "0.1.1" }
-oxitls-adapter-rustls-rustcrypto = { path = "crates/oxitls-adapter-rustls-rustcrypto", version = "0.1.1" }
-oxitls-adapter-aws-lc = { path = "crates/oxitls-adapter-aws-lc", version = "0.1.1" }
-oxitls-adapter-pkcs11 = { path = "crates/oxitls-adapter-pkcs11", version = "0.1.1" }
-oxitls-webpki-roots = { path = "crates/oxitls-webpki-roots", version = "0.1.1" }
-oxitls = { path = "crates/oxitls", version = "0.1.1" }
-oxitls-h2 = { path = "crates/oxitls-h2", version = "0.1.1" }
-oxitls-rcgen = { path = "crates/oxitls-rcgen", version = "0.1.1" }
+oxitls-core = { path = "crates/oxitls-core", version = "0.1.2" }
+oxitls-adapter-rustls-rustcrypto = { path = "crates/oxitls-adapter-rustls-rustcrypto", version = "0.1.2" }
+oxitls-adapter-aws-lc = { path = "crates/oxitls-adapter-aws-lc", version = "0.1.2" }
+oxitls-adapter-pkcs11 = { path = "crates/oxitls-adapter-pkcs11", version = "0.1.2" }
+oxitls-webpki-roots = { path = "crates/oxitls-webpki-roots", version = "0.1.2" }
+oxitls = { path = "crates/oxitls", version = "0.1.2" }
+oxitls-h2 = { path = "crates/oxitls-h2", version = "0.1.2" }
+oxitls-rcgen = { path = "crates/oxitls-rcgen", version = "0.1.2" }
 # external -- default-features = false on rustls/tokio-rustls avoids the aws_lc_rs default
 rustls = { version = "0.23", default-features = false, features = ["std", "tls12"] }
 rustls-pemfile = { version = "2.2" }
@@ -86,7 +86,7 @@ p12 = { version = "0.6" }
 # AES-256-GCM for OxiTicketer (no ring)
 aes-gcm = { version = "0.10.3", default-features = false, features = ["aes", "alloc"] }
 # oxiarc-deflate: pure-Rust RFC 1950 zlib / RFC 1951 DEFLATE — cert compression (RFC 8879)
-oxiarc-deflate = { version = "0.2", default-features = false }
+oxiarc-deflate = { version = "0.3.3", default-features = false }
 hkdf = { version = "0.13", default-features = false }
 # ChaCha20-Poly1305 (pure Rust, no ring) — used by bench crate AEAD comparison
 chacha20poly1305 = { version = "0.10", default-features = false, features = ["alloc"] }
@@ -126,3 +126,10 @@ secrecy = { version = "0.10.3" }
 parking_lot = { version = "0.12.5" }
 # dhat: heap profiler (feature-gated; used by oxitls-webpki-roots and oxitls-bench)
 dhat = { version = "0.3" }
+# ring: C/FFI crypto (bench comparison only — never on normal dep edge; feature-gated)
+ring = { version = "0.17" }
+# oxihttp: COOLJAPAN HTTP client/server (bench dev-dep only)
+oxihttp = { version = "0.1.0", default-features = false }
+# oxicrypto cross-workspace published crates (dev-dep in oxitls-adapter-aws-lc wave8 test)
+oxicrypto-adapter-aws-lc = { version = "0.1.2" }
+oxicrypto-core = { version = "0.1.2" }

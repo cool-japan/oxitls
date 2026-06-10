@@ -156,10 +156,10 @@ oxitls-core                      = { workspace = true }
 getrandom                        = { workspace = true }
 sha2                             = { version = "0.11", default-features = false, features = ["oid"] }
 # Comparison crates (bench-only, do NOT appear on the oxitls library normal edge)
-ring         = { version = "0.17" }
-aws-lc-rs    = { version = "1" }
+ring         = { workspace = true }
+aws-lc-rs    = { workspace = true }
 # HTTP latency bench: oxihttp (server + TLS) — dev-only, must not appear on normal edge
-oxihttp      = { version = "0.1.0", default-features = false, features = ["tls"] }
+oxihttp      = { workspace = true, features = ["tls"] }
 hyper         = { workspace = true }
 hyper-util    = { workspace = true }
 http-body-util = { workspace = true }

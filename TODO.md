@@ -1,10 +1,10 @@
 # OxiTLS TODO
 
-## Status — v0.1.1 (2026-06-04)
+## Status — v0.1.2 (2026-06-10)
 
 Pure-Rust TLS transport stack at ~26 000 SLOC across 9 subcrates. All M0–M5
-milestones and Waves 6–9 complete, plus ECH/HPKE (RFC 9180) added in v0.1.1.
-**423 tests passing** (10 skipped — PKCS#11 SoftHSM + ignored ignores).
+milestones and Waves 6–9 complete, plus ECH/HPKE (RFC 9180) and RFC 8879 cert compression added in v0.1.1.
+**424 tests passing** (10 skipped — PKCS#11 SoftHSM + ignored ignores).
 
 Release-check performed 2026-06-01 (v0.1.0):
 - cargo check: PASS
@@ -22,6 +22,17 @@ Release-check performed 2026-06-04 (v0.1.1):
 - Added RFC 9180 KAT vectors (Appendix A) in hpke/vectors.rs
 - Added hybrid PKCS#11+aws-lc integration tests (wave10_hybrid_pkcs11.rs)
 - Version bumped: Cargo.toml, CHANGELOG.md, pub_oxitls.sh, all subcrate READMEs
+
+Release-check performed 2026-06-10 (v0.1.2):
+- cargo fmt: PASS (no changes needed)
+- cargo clippy --all-features --all-targets -- -D warnings: PASS (0 warnings)
+- RUSTDOCFLAGS="-D warnings" cargo doc --all-features --no-deps: PASS (0 warnings)
+- cargo nextest run --all-features: 424 passed, 10 skipped
+- Activated wave8 coexist integration tests (oxitls + oxicrypto aws-lc-rs in one binary)
+- oxiarc-deflate bumped to 0.3.3; oxicrypto-{adapter-aws-lc,core} added as dev-deps
+- CHANGELOG.md, README.md, TODO.md version references updated to 0.1.2
+- pub_oxitls.sh VERSION already at 0.1.2
+- cargo publish --dry-run: expected-fail (0.1.2 deps not yet on crates.io)
 
 ## Core Implementation
 - [x] 0-RTT early data support in ClientBuilder and ServerBuilder (~200 SLOC)
@@ -78,6 +89,7 @@ Release-check performed 2026-06-04 (v0.1.1):
 - [x] H2 server push test
 - [x] Root store filtering and merging tests
 - [x] aws-lc adapter handshake test (cross-provider client/server)
+- [x] Activated wave8 coexist test (oxitls + oxicrypto aws-lc-rs in one binary, zero symbol conflicts) now that oxicrypto published 0.1.1; ported both real tests from oxicrypto and removed the `oxicrypto-coexist` marker feature. (done 2026-06-05)
 - [x] PKCS#11 SoftHSM integration test (ignored by default)
 - [x] OCSP RSA-2048 signer verification tests (using key fixture)
 - [x] Total: 339 tests, 8 skipped (PKCS#11 SoftHSM + #[ignore] guards)
@@ -115,3 +127,4 @@ Release-check performed 2026-06-04 (v0.1.1):
 - [x] Wave 9: OCSP stapling integration tests
 - [x] v0.1.0 release-check (2026-06-01): all tests green, CHANGELOG, README, LICENSE, doc fixes, publish dry-run
 - [x] v0.1.1 release-check (2026-06-03): 339 tests, ECH/HPKE KATs, cert-compression, hybrid PKCS11+aws-lc, version bump
+- [x] v0.1.2 release-check (2026-06-10): 424 passed, 10 skipped; wave8 coexist test activated; CHANGELOG/README/TODO finalized; dry-run expected-fail (deps not yet published)

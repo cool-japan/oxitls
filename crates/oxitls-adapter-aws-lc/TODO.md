@@ -46,12 +46,12 @@ Feature-gated (`aws-lc` feature, default off) BOUNDED_FFI adapter providing an `
 
 ## Proposed follow-ups
 
-- **oxicrypto-adapter-aws-lc coexist link-test** (`TODO.md` line for this item): The link-cleanliness
-  check is **already empirically verified** (2026-05-29, aws-lc-rs 1.17.0 deduped, zero symbol
-  conflicts). A test scaffold with activation instructions lives in `tests/wave8_coexist.rs`.
-  Making it a permanent dev-dependency is **blocked**: oxicrypto must be on a **registry** (crates.io
-  or equivalent) because oxitls is already released to crates.io (a cross-workspace path/git dep
-  would break `cargo publish`), and the root `Cargo.toml:63` explicitly forbids cross-workspace path
-  deps. User options: (a) wait for oxicrypto to publish to crates.io (recommended); (b) relax the
-  rule and gate a git-source dev-dep behind the existing `oxicrypto-coexist` feature, accepting
-  this cannot appear in a published release. Until then, this item stays `- [ ]`.
+- [x] **oxicrypto-adapter-aws-lc coexist link-test** (done 2026-06-04): Both aws-lc-rs adapters
+  (oxitls + oxicrypto) are now **actively tested** in one binary via `tests/wave8_coexist.rs`
+  (gated behind the `aws-lc` feature). The link-cleanliness check — aws-lc-rs 1.17.0 deduped,
+  zero symbol conflicts — was previously only empirically verified (2026-05-29) and deferred as a
+  stub because oxicrypto was unpublished. Now that oxicrypto publishes `0.1.1` to crates.io, the
+  registry dev-dependencies `oxicrypto-adapter-aws-lc = { version = "0.1.1", features = ["aws-lc"] }`
+  and `oxicrypto-core = { version = "0.1.1" }` are added (dev-deps are stripped on publish, so this
+  is safe for the already-released crate, with no cross-workspace path/git dep). The earlier
+  `oxicrypto-coexist` marker feature is removed.

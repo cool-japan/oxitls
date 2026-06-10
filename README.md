@@ -5,10 +5,10 @@ OxiTLS is the COOLJAPAN-blessed Pure Rust TLS transport stack. It provides TLS
 the default-feature path, while still offering opt-in `ffi` adapters for FIPS or
 high-throughput consumers who knowingly accept the C dependency.
 
-## Status: v0.1.1 — Production Ready
+## Status: v0.1.2 — Active Development
 
-All M0–M5 milestones complete, plus Waves 6–9 and the v0.1.1 ECH/HPKE feature.
-**423 tests** passing across 9 subcrates (~26 000 SLOC).
+All M0–M5 milestones complete, plus Waves 6–9, the v0.1.1 ECH/HPKE feature, and RFC 8879 cert compression.
+**424 tests** passing across 9 subcrates (~26 000 SLOC).
 
 ## Why OxiTLS?
 
@@ -35,18 +35,18 @@ ecosystem-wide remediation for that contamination.
 
 ```toml
 [dependencies]
-oxitls = "0.1"
+oxitls = "0.1.2"
 # Pure Rust TLS + WebPKI roots (default)
 # For HTTP/2:
-oxitls = { version = "0.1", features = ["h2"] }
+oxitls = { version = "0.1.2", features = ["h2"] }
 # For certificate generation:
-oxitls = { version = "0.1", features = ["rcgen"] }
+oxitls = { version = "0.1.2", features = ["rcgen"] }
 # For FIPS / high-throughput (C dependency, off by default):
-oxitls = { version = "0.1", features = ["aws-lc"] }
+oxitls = { version = "0.1.2", features = ["aws-lc"] }
 # For HSM/TPM via PKCS#11 (C dependency, off by default):
-oxitls = { version = "0.1", features = ["pkcs11"] }
+oxitls = { version = "0.1.2", features = ["pkcs11"] }
 # For post-quantum key exchange (X25519+ML-KEM-768):
-oxitls = { version = "0.1", features = ["post-quantum"] }
+oxitls = { version = "0.1.2", features = ["post-quantum"] }
 ```
 
 ## Quick Start

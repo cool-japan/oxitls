@@ -10,7 +10,9 @@
 //! cargo nextest run -p oxitls-adapter-aws-lc --features aws-lc wave9
 //! ```
 
-#![cfg(feature = "aws-lc")]
+// oxihttp-server 0.1.1 now depends on oxitls ^0.1.1 (compatible with workspace 0.1.2).
+// This module is compiled only when both `aws-lc` and `oxihttp-test` features are enabled.
+#![cfg(all(feature = "aws-lc", feature = "oxihttp-test"))]
 
 #[cfg(test)]
 mod wave9 {

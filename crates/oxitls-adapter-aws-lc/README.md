@@ -129,7 +129,6 @@ Because `aws_lc_rs::error::*` and `rustls::Error` are foreign types, the orphan 
 |---------|---------|-----------|-------------|
 | *(none)* | ✅ | ✅ | Name reserved; **no** C code in the build closure |
 | `aws-lc` | — | ❌ (C/FFI) | Enables the aws-lc-rs provider via `rustls/aws_lc_rs`. Pulls AWS-LC C code |
-| `oxicrypto-coexist` | — | n/a | Marker only — documents future oxicrypto coexistence (verified to share aws-lc-rs 1.17.0 without symbol conflicts); adds no dependency until oxicrypto publishes a registry release |
 
 ## Error type
 

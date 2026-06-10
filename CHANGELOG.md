@@ -5,6 +5,28 @@ All notable changes to OxiTLS will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.2] - 2026-06-10
+
+### Added
+- **Coexistence integration tests** (`oxitls-adapter-aws-lc`): activated the wave8 coexist
+  test that proves `oxitls-adapter-aws-lc` and `oxicrypto-adapter-aws-lc` link and initialize
+  cleanly in the same binary with zero symbol conflicts, now that `oxicrypto` 0.1.1 is
+  published to crates.io. Two real tests replace the former placeholder:
+  `both_aws_lc_crates_link_and_initialize_cleanly` and
+  `sequential_use_of_both_crates_no_interference`.
+- oxicrypto-adapter-aws-lc and oxicrypto-core added as dev-dependencies (registry, stripped
+  on publish) to enable the real coexist tests.
+
+### Changed
+- Bumped `oxiarc-deflate` to 0.3.3 in workspace dependencies (Pure Rust policy, latest release).
+- All workspace internal deps updated to 0.1.2 in `Cargo.toml`.
+- `oxihttp-server` dev-dep in `oxitls-adapter-aws-lc` re-enabled at 0.1.1 (post-publish
+  diamond dep resolved).
+
+### Fixed
+- Removed the `oxicrypto-coexist` placeholder feature and the `coexist_placeholder` no-op
+  test that were blocking real coexist coverage.
+
 ## [0.1.1] - 2026-06-04
 
 ### Added
@@ -174,5 +196,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - PKCS#11 tests require SoftHSM2 and are marked `#[ignore]` by default
 - `oxitls-bench` has `publish = false` (internal benchmarking tool)
 
+[0.1.2]: https://github.com/cool-japan/oxitls/releases/tag/v0.1.2
 [0.1.1]: https://github.com/cool-japan/oxitls/releases/tag/v0.1.1
 [0.1.0]: https://github.com/cool-japan/oxitls/releases/tag/v0.1.0
