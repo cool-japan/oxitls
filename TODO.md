@@ -1,6 +1,6 @@
 # OxiTLS TODO
 
-## Status — v0.1.2 (2026-06-10)
+## Status — v0.1.3 (work in progress)
 
 Pure-Rust TLS transport stack at ~26 000 SLOC across 9 subcrates. All M0–M5
 milestones and Waves 6–9 complete, plus ECH/HPKE (RFC 9180) and RFC 8879 cert compression added in v0.1.1.
@@ -33,6 +33,18 @@ Release-check performed 2026-06-10 (v0.1.2):
 - CHANGELOG.md, README.md, TODO.md version references updated to 0.1.2
 - pub_oxitls.sh VERSION already at 0.1.2
 - cargo publish --dry-run: expected-fail (0.1.2 deps not yet on crates.io)
+
+Release-check performed 2026-06-19 (v0.1.3):
+- cargo fmt --all: PASS (no changes needed)
+- cargo clippy --all-features --all-targets -- -D warnings: PASS (0 warnings)
+- RUSTDOCFLAGS="-D warnings" cargo doc --all-features --no-deps: PASS (0 warnings)
+- cargo nextest run --all-features: 424 passed, 10 skipped
+- cargo test --all-features --doc: PASS (all doc tests pass)
+- oxihttp dev-dep bumped 0.1.0→0.1.2; oxihttp-server dev-dep bumped 0.1.1→0.1.2
+- Doctest in oxitls-adapter-aws-lc fixed: fn-wrapper form for rustdoc typed-fn requirement
+- CHANGELOG.md updated with 0.1.3 entry (dated 2026-06-19)
+- pub_oxitls.sh VERSION=0.1.3, license header: Apache-2.0
+- cargo publish --dry-run oxitls-core: PASS (cascade failures for dependents expected pre-publish)
 
 ## Core Implementation
 - [x] 0-RTT early data support in ClientBuilder and ServerBuilder (~200 SLOC)

@@ -16,7 +16,7 @@ exclude = [
 ]
 
 [workspace.package]
-version = "0.1.2"
+version = "0.1.3"
 edition = "2021"
 rust-version = "1.89"
 authors = ["COOLJAPAN OU (Team Kitasan)"]
@@ -26,14 +26,14 @@ description = "OxiTLS is the COOLJAPAN-blessed Pure Rust TLS transport stack."
 
 [workspace.dependencies]
 # crates in this workspace
-oxitls-core = { path = "crates/oxitls-core", version = "0.1.2" }
-oxitls-adapter-rustls-rustcrypto = { path = "crates/oxitls-adapter-rustls-rustcrypto", version = "0.1.2" }
-oxitls-adapter-aws-lc = { path = "crates/oxitls-adapter-aws-lc", version = "0.1.2" }
-oxitls-adapter-pkcs11 = { path = "crates/oxitls-adapter-pkcs11", version = "0.1.2" }
-oxitls-webpki-roots = { path = "crates/oxitls-webpki-roots", version = "0.1.2" }
-oxitls = { path = "crates/oxitls", version = "0.1.2" }
-oxitls-h2 = { path = "crates/oxitls-h2", version = "0.1.2" }
-oxitls-rcgen = { path = "crates/oxitls-rcgen", version = "0.1.2" }
+oxitls-core = { path = "crates/oxitls-core", version = "0.1.3" }
+oxitls-adapter-rustls-rustcrypto = { path = "crates/oxitls-adapter-rustls-rustcrypto", version = "0.1.3" }
+oxitls-adapter-aws-lc = { path = "crates/oxitls-adapter-aws-lc", version = "0.1.3" }
+oxitls-adapter-pkcs11 = { path = "crates/oxitls-adapter-pkcs11", version = "0.1.3" }
+oxitls-webpki-roots = { path = "crates/oxitls-webpki-roots", version = "0.1.3" }
+oxitls = { path = "crates/oxitls", version = "0.1.3" }
+oxitls-h2 = { path = "crates/oxitls-h2", version = "0.1.3" }
+oxitls-rcgen = { path = "crates/oxitls-rcgen", version = "0.1.3" }
 # external -- default-features = false on rustls/tokio-rustls avoids the aws_lc_rs default
 rustls = { version = "0.23", default-features = false, features = ["std", "tls12"] }
 rustls-pemfile = { version = "2.2" }
@@ -129,7 +129,7 @@ dhat = { version = "0.3" }
 # ring: C/FFI crypto (bench comparison only — never on normal dep edge; feature-gated)
 ring = { version = "0.17" }
 # oxihttp: COOLJAPAN HTTP client/server (bench dev-dep only)
-oxihttp = { version = "0.1.0", default-features = false }
+oxihttp = { version = "0.1.2", default-features = false }
 # oxicrypto cross-workspace published crates (dev-dep in oxitls-adapter-aws-lc wave8 test)
-oxicrypto-adapter-aws-lc = { version = "0.1.2" }
-oxicrypto-core = { version = "0.1.2" }
+oxicrypto-adapter-aws-lc = { version = "0.1.3" }
+oxicrypto-core = { version = "0.1.3" }

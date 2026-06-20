@@ -12,16 +12,16 @@ The facade also performs **provider selection** through feature flags. The defau
 ```toml
 [dependencies]
 # Default: Pure-Rust TLS + Mozilla webpki roots
-oxitls = "0.1.1"
+oxitls = "0.1.3"
 
 # HTTP/2 over TLS and Pure-Rust cert generation
-oxitls = { version = "0.1.1", features = ["h2", "rcgen"] }
+oxitls = { version = "0.1.3", features = ["h2", "rcgen"] }
 
 # Opt in to the aws-lc-rs provider (NOT Pure Rust — C/FFI):
-oxitls = { version = "0.1.1", features = ["aws-lc"] }
+oxitls = { version = "0.1.3", features = ["aws-lc"] }
 
 # Opt in to the PKCS#11 HSM/TPM signer (NOT Pure Rust — loads a C module):
-oxitls = { version = "0.1.1", features = ["pkcs11"] }
+oxitls = { version = "0.1.3", features = ["pkcs11"] }
 ```
 
 ## Quick Start

@@ -14,7 +14,7 @@
 //! # Usage
 //! ```no_run
 //! # #[cfg(feature = "aws-lc")]
-//! # {
+//! # fn example() -> Result<(), String> {
 //! use oxitls_adapter_aws_lc::aws_lc_provider;
 //! use rustls::ServerConfig;
 //!
@@ -22,7 +22,7 @@
 //! let _builder = ServerConfig::builder_with_provider(provider)
 //!     .with_safe_default_protocol_versions()
 //!     .map_err(|e| format!("protocol version error: {e}"))?;
-//! # Ok::<(), String>(())
+//! # Ok(())
 //! # }
 //! ```
 

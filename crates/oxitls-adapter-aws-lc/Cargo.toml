@@ -50,9 +50,10 @@ oxitls-adapter-rustls-rustcrypto = { path = "../oxitls-adapter-rustls-rustcrypto
 oxitls-rcgen = { path = "../oxitls-rcgen" }
 aws-lc-rs    = { workspace = true }
 p256         = { workspace = true }
-# wave9 HTTPS integration test: oxihttp server + raw hyper client, both aws-lc-rs backed
-# oxihttp-server 0.1.1 depends on oxitls ^0.1.1 — compatible with workspace 0.1.2.
-oxihttp-server = { version = "0.1.1", features = ["tls"] }
+# wave9 HTTPS integration test: disabled for 0.1.3 publish — oxihttp-server 0.1.2 creates
+# a diamond dep conflict on oxitls-core. Re-enable when oxihttp publishes a version that
+# depends on oxitls ^0.1.3+.
+# oxihttp-server = { version = "0.1.2", features = ["tls"] }
 hyper          = { workspace = true }
 hyper-util     = { workspace = true }
 http-body-util = { workspace = true }

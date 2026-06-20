@@ -5,6 +5,23 @@ All notable changes to OxiTLS will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.3] - 2026-06-19
+
+### Changed
+- All workspace-internal crate versions bumped to 0.1.3 in root `Cargo.toml`
+  (`oxitls-core`, `oxitls-adapter-rustls-rustcrypto`, `oxitls-adapter-aws-lc`,
+  `oxitls-adapter-pkcs11`, `oxitls-webpki-roots`, `oxitls`, `oxitls-h2`, `oxitls-rcgen`).
+- `oxihttp` dev-dependency updated from 0.1.0 → 0.1.2 in workspace `Cargo.toml`.
+- `oxihttp-server` dev-dependency in `oxitls-adapter-aws-lc` updated from 0.1.1 → 0.1.2
+  (HTTPS integration test wave9 picks up latest oxihttp-server release).
+
+### Fixed
+- Doctest in `oxitls-adapter-aws-lc` corrected: bare `# {` / `# Ok::<(), String>(())`
+  pattern replaced with `# fn example() -> Result<(), String>` / `# Ok(())` to satisfy
+  rustdoc's typed-fn requirement and eliminate the rustdoc warning.
+
+---
+
 ## [0.1.2] - 2026-06-10
 
 ### Added
@@ -196,6 +213,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - PKCS#11 tests require SoftHSM2 and are marked `#[ignore]` by default
 - `oxitls-bench` has `publish = false` (internal benchmarking tool)
 
+[0.1.3]: https://github.com/cool-japan/oxitls/releases/tag/v0.1.3
 [0.1.2]: https://github.com/cool-japan/oxitls/releases/tag/v0.1.2
 [0.1.1]: https://github.com/cool-japan/oxitls/releases/tag/v0.1.1
 [0.1.0]: https://github.com/cool-japan/oxitls/releases/tag/v0.1.0
