@@ -3,22 +3,22 @@
 [![Crates.io](https://img.shields.io/crates/v/oxitls-webpki-roots.svg)](https://crates.io/crates/oxitls-webpki-roots)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
-`oxitls-webpki-roots` provides the trust-anchor layer for the OxiTLS ecosystem. It wraps the [`webpki-roots`] Mozilla CA bundle behind a cached `webpki_root_certs()` accessor, adds a flexible `RootStoreBuilder` for combining bundled roots with custom PEM/DER certificates (and excluding specific anchors by fingerprint), and offers introspection via `TrustAnchorInfo`, an LRU `IntermediateCertCache`, expiration helpers, and an optional OS-native root loader.
+`oxitls-webpki-roots` provides the trust-anchor layer for the OxiTLS ecosystem. It wraps the [`webpki-roots`] Mozilla CA bundle behind a cached `webpki_root_certs()` accessor, adds a flexible `RootStoreBuilder` for combining bundled roots with custom PEM/DER certificates (and excluding specific anchors by fingerprint), and offers introspection via `TrustAnchorInfo`, an LRU `IntermediateCertCache`, and expiration helpers. OS-native certificate-store loading lives in the separate `oxitls-native-certs` crate (apps that need it depend on it directly).
 
-The default build is **100% Pure Rust** (`#![forbid(unsafe_code)]`): the Mozilla bundle, PEM parsing (`rustls-pemfile`), fingerprinting (`sha2`), and the LRU cache (`lru`) are all pure Rust. The OS-native root loader is feature-gated (`native-roots`) because it pulls in platform FFI shims on macOS / Windows; Linux native loading stays pure Rust (it just reads PEM files).
+This crate is **100% Pure Rust** (`#![forbid(unsafe_code)]`): the Mozilla bundle, PEM parsing (`rustls-pemfile`), fingerprinting (`sha2`), and the LRU cache (`lru`) are all pure Rust. There is **no `native-roots` feature** — OS-native certificate-store loading (which pulls in platform FFI shims on macOS / Windows) has moved to the dedicated `oxitls-native-certs` crate, which apps add directly when they need it.
 
 ## Installation
 
 ```toml
 [dependencies]
-oxitls-webpki-roots = "0.1.3"
+oxitls-webpki-roots = "0.2.0"
 ```
 
 Via the façade (this crate is the default `webpki-roots` feature of `oxitls`):
 
 ```toml
 [dependencies]
-oxitls = { version = "0.1.3", features = ["webpki-roots"] }
+oxitls = { version = "0.2.0", features = ["webpki-roots"] }
 ```
 
 ## Quick Start
@@ -129,22 +129,13 @@ Summary of a single trust anchor (`Debug`, `Clone`, `Display` — emits `SPKI-SH
 
 All methods return `Result<…, TlsError>` (poison-safe).
 
-### `native_roots` module (feature `native-roots`)
-
-| Function | Description |
-|----------|-------------|
-| `load_native_roots()` | `async` — load the OS-native root store into a `rustls::RootCertStore` |
-
-Platform behaviour: macOS queries `Security.framework` trust settings (User/Admin/System domains); Linux reads the first PEM bundle among the common system locations via `tokio::fs`; Windows opens the current-user `ROOT` store via `schannel`; other targets return [`TlsError::Other`]. FFI-backed paths run on `spawn_blocking`; all loaders are best-effort (malformed certs are skipped).
-
 ## Feature Flags
 
 | Feature | Default | Description |
 |---------|---------|-------------|
-| `native-roots` | off | Enables `load_native_roots()` (platform-native store; pulls in `security-framework`/`schannel` FFI on macOS/Windows) |
 | `dhat-heap` | off | Enables the `dhat` heap profiler as the global allocator in benchmarks |
 
-> Default features stay 100% Pure Rust. Only `native-roots` introduces platform FFI, and only on macOS / Windows.
+> This crate is 100% Pure Rust — no feature pulls in platform FFI. OS-native certificate-store loading lives in the separate `oxitls-native-certs` crate.
 
 ## Benchmarks
 
@@ -158,7 +149,8 @@ Two `criterion` targets (run with `cargo bench -p oxitls-webpki-roots`):
 ## Cross-references
 
 - **`oxitls`** — the façade; this crate is the default `webpki-roots` feature.
-- **`oxitls-core`** — defines [`TlsError`], returned by the cache and native-root loader.
+- **`oxitls-core`** — defines [`TlsError`], returned by the cache.
+- **`oxitls-native-certs`** — opt-in quarantine crate for OS-native certificate-store loading (formerly the `native-roots` feature here); add it directly when you need platform trust roots.
 - **`oxitls-adapter-rustls-rustcrypto`** — the Pure-Rust provider that verifies certificates against this root store.
 - **`oxitls-rcgen`** — generate the CA certificates you add via `RootStoreBuilder`.
 

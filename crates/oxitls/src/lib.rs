@@ -131,29 +131,6 @@ pub fn connector_with_webpki_roots() -> Result<RustcryptoConnector, TlsError> {
     Ok(RustcryptoConnector::new(cfg))
 }
 
-/// aws-lc-rs backed `CryptoProvider` and provider type.
-///
-/// Enable with `features = ["aws-lc"]`.  The default feature set does **not**
-/// include this module — the default closure is 100% Pure Rust.
-///
-/// # Example
-/// ```no_run
-/// # #[cfg(feature = "aws-lc")]
-/// # {
-/// use oxitls::aws_lc::{aws_lc_provider, AwsLcTlsProvider};
-/// let provider = aws_lc_provider();
-/// # }
-/// ```
-#[cfg(feature = "aws-lc")]
-pub mod aws_lc {
-    pub use oxitls_adapter_aws_lc::{aws_lc_provider, AwsLcTlsProvider};
-
-    /// Convenience alias: the aws-lc-rs backed provider.
-    pub fn provider() -> std::sync::Arc<rustls::crypto::CryptoProvider> {
-        aws_lc_provider()
-    }
-}
-
 /// Re-export `h2::Reason` as `H2Reason` for ergonomic error handling.
 #[cfg(feature = "h2")]
 pub use oxitls_h2::Reason as H2Reason;

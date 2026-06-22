@@ -16,11 +16,9 @@ use sha2::{Digest, Sha256};
 
 mod expiring;
 mod intermediate_cache;
-mod native_roots;
 
 pub use expiring::{expiring_roots, expiring_roots_from_ders, parse_not_after};
 pub use intermediate_cache::IntermediateCertCache;
-pub use native_roots::load_native_roots;
 
 // ── Cached root store ────────────────────────────────────────────────────────
 

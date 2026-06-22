@@ -13,7 +13,7 @@ introspection, filtered root loading, and root store merging.
 - [x] Add `RootStoreBuilder` with methods `add_pem(data)`, `add_der(bytes)`, `exclude_fingerprint(sha256)`, `build() -> RootCertStore` (~200 SLOC)
 - [x] Add intermediate certificate caching: `IntermediateCertCache` backed by an in-memory LRU (~300 SLOC)
 - [x] Add `merge_root_stores(stores: &[RootCertStore]) -> RootCertStore` for combining multiple trust sources (~30 SLOC)
-- [x] Add platform native root store loading (macOS Keychain, Linux /etc/ssl/certs) behind `native-roots` feature flag (~150 SLOC)
+- [x] Add platform native root store loading (macOS Keychain, Linux /etc/ssl/certs) — moved out of the `native-roots` feature into the standalone `oxitls-native-certs` quarantine crate (~150 SLOC)
 - [x] Add root CA expiration checking: `expiring_roots(within_days: u32) -> Vec<TrustAnchorInfo>` (~50 SLOC)
 
 ## API Improvements

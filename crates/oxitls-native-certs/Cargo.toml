@@ -1,0 +1,20 @@
+[package]
+name = "oxitls-native-certs"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "OxiTLS OS-native certificate-store adapter (Security.framework / SChannel FFI, opt-in quarantine crate)"
+categories = ["cryptography", "network-programming"]
+keywords = ["tls", "rustls", "native-certs", "cooljapan", "oxitls"]
+
+[dependencies]
+oxitls-core = { workspace = true }
+rustls = { workspace = true }
+rustls-pki-types = { workspace = true }
+rustls-pemfile = { workspace = true }
+tokio = { workspace = true }
+security-framework = { workspace = true }
+schannel = { workspace = true }

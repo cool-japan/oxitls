@@ -63,7 +63,7 @@ impl OcspResponseResolver for StaticOcspResolver {
 ///
 /// Default protocol: TLS 1.3 only. Use `with_protocol_versions` to allow TLS 1.2 as well.
 /// Default provider: Pure-Rust `rustls-rustcrypto`. Use `with_provider` to inject an
-/// alternative (e.g. `aws_lc_provider()` from `oxitls::aws_lc`).
+/// alternative (e.g. an external `aws-lc-rs` backed provider).
 ///
 /// # Example
 /// ```no_run

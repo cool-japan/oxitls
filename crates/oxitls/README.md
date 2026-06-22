@@ -5,24 +5,20 @@
 
 `oxitls` is the top-level facade for the OxiTLS stack. With its default features it wires rustls to the Pure-Rust [`oxitls-adapter-rustls-rustcrypto`](https://crates.io/crates/oxitls-adapter-rustls-rustcrypto) provider, giving you a complete TLS 1.3 / TLS 1.2 client and server with **zero FFI** — no `ring`, no `aws-lc-rs`, no OpenSSL. It bundles ergonomic `ClientBuilder` / `ServerBuilder` types, a unified `OxiTlsStream`, a Pure-Rust AES-256-GCM session ticketer, RFC 8446 §8 anti-replay for 0-RTT, and the Mozilla CA bundle.
 
-The facade also performs **provider selection** through feature flags. The default closure is 100% Pure Rust and never calls `CryptoProvider::install_default()` — providers are injected per-config. Two non-default, non-Pure-Rust providers can be opted in: the C-backed aws-lc-rs provider (`aws-lc`) and the PKCS#11 HSM/TPM signer (`pkcs11`). Enabling them does not change the default Pure-Rust path; it only adds extra modules and re-exports.
+The facade also performs **provider selection** through feature flags. The default closure is 100% Pure Rust and never calls `CryptoProvider::install_default()` — providers are injected per-config. Non-Pure-Rust providers (aws-lc-rs and PKCS#11) are available as standalone adapter crates as of 0.2.0 and are no longer feature flags of this facade.
 
 ## Installation
 
 ```toml
 [dependencies]
 # Default: Pure-Rust TLS + Mozilla webpki roots
-oxitls = "0.1.3"
+oxitls = "0.2.0"
 
 # HTTP/2 over TLS and Pure-Rust cert generation
-oxitls = { version = "0.1.3", features = ["h2", "rcgen"] }
-
-# Opt in to the aws-lc-rs provider (NOT Pure Rust — C/FFI):
-oxitls = { version = "0.1.3", features = ["aws-lc"] }
-
-# Opt in to the PKCS#11 HSM/TPM signer (NOT Pure Rust — loads a C module):
-oxitls = { version = "0.1.3", features = ["pkcs11"] }
+oxitls = { version = "0.2.0", features = ["h2", "rcgen"] }
 ```
+
+For the aws-lc-rs provider (FIPS/high-throughput) or the PKCS#11 HSM/TPM signer, add the respective adapter crate directly — they are not feature flags of the `oxitls` facade as of 0.2.0.
 
 ## Quick Start
 
@@ -80,10 +76,8 @@ let connector = oxitls::connector_with_webpki_roots()?;
 | Provider | Feature | Pure Rust | Crate behind it |
 |----------|---------|-----------|-----------------|
 | RustCrypto (rustls + RustCrypto) | `pure` *(default)* | ✅ | [`oxitls-adapter-rustls-rustcrypto`](https://crates.io/crates/oxitls-adapter-rustls-rustcrypto) |
-| aws-lc-rs | `aws-lc` | ❌ (C/FFI) | [`oxitls-adapter-aws-lc`](https://crates.io/crates/oxitls-adapter-aws-lc) |
-| PKCS#11 HSM/TPM signer | `pkcs11` | ❌ (loads a C module) | [`oxitls-adapter-pkcs11`](https://crates.io/crates/oxitls-adapter-pkcs11) |
 
-The default `pure` provider is available as `oxitls::pure_provider()`. The opt-in providers live under feature-gated modules (`oxitls::aws_lc`) and adapter re-exports; enabling them never affects the default Pure-Rust closure.
+The default `pure` provider is available as `oxitls::pure_provider()`. The aws-lc-rs and PKCS#11 providers are available as standalone adapter crates and are not feature flags of this facade as of 0.2.0.
 
 ## API Overview
 
@@ -201,7 +195,6 @@ RFC 9180 base-mode HPKE provider with 4 suites (X25519/P-256 × AES-128-GCM/ChaC
 |--------|---------|-------------|
 | `h2` | `h2` | HTTP/2 over TLS (re-exports [`oxitls-h2`](https://crates.io/crates/oxitls-h2)); also `H2Error`, `H2Settings`, `H2Reason` |
 | `rcgen_bridge` | `rcgen` | Pure-Rust certificate generation (re-exports [`oxitls-rcgen`](https://crates.io/crates/oxitls-rcgen)) |
-| `aws_lc` | `aws-lc` | aws-lc-rs provider (`aws_lc_provider`, `AwsLcTlsProvider`, `provider()`) — **not** Pure Rust |
 | `quic_preview` | `quic-preview` | `pure_quic_provider()` — the Pure-Rust provider for QUIC handshakes |
 
 ### Re-exports at the crate root
@@ -227,8 +220,6 @@ When `generic-transport` is enabled, `ClientBuilder` / `ServerBuilder` implement
 | `post-quantum` | — | ✅ | X25519MLKEM768 hybrid KX namespace (implies adapter `post-quantum`) |
 | `ech` | — | ✅ | Encrypted Client Hello — RFC 9180 HPKE base-mode; GREASE + real ECH config-list; implies `pure` |
 | `cert-compression` | — | ✅ | RFC 8879 TLS certificate compression via OxiARC pure-Rust zlib |
-| `aws-lc` | — | ❌ (C/FFI) | aws-lc-rs provider via `oxitls-adapter-aws-lc` |
-| `pkcs11` | — | ❌ (loads a C module) | PKCS#11 HSM/TPM signer via `oxitls-adapter-pkcs11` |
 
 ## Error type
 

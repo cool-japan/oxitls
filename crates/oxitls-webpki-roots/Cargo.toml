@@ -12,8 +12,6 @@ keywords = ["tls", "rustls", "webpki", "pure-rust", "cooljapan"]
 
 [features]
 default = []
-# Enables platform native certificate store (macOS Security.framework / Windows SChannel)
-native-roots = []
 # Enables dhat heap profiler as global allocator in benches
 dhat-heap = ["dep:dhat"]
 
@@ -26,10 +24,7 @@ webpki-roots = { workspace = true }
 sha2 = { version = "0.11", default-features = false, features = ["alloc"] }
 x509-parser = { workspace = true }
 lru = { workspace = true }
-tokio = { workspace = true }
 time = { workspace = true }
-security-framework = { workspace = true }
-schannel = { workspace = true }
 
 [[bench]]
 name    = "webpki_roots_construction"
@@ -41,7 +36,6 @@ harness = false
 
 [dev-dependencies]
 criterion        = { workspace = true }
-tokio            = { workspace = true, features = ["full"] }
 webpki-roots     = { workspace = true }
 
 [dependencies.dhat]

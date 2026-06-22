@@ -5,11 +5,11 @@ OxiTLS is the COOLJAPAN-blessed Pure Rust TLS transport stack. It provides TLS
 the default-feature path, while still offering opt-in `ffi` adapters for FIPS or
 high-throughput consumers who knowingly accept the C dependency.
 
-## Status: v0.1.3 — 2026-06-19
+## Status: v0.2.0 — 2026-06-22
 
 All M0–M5 milestones complete, plus Waves 6–9, the v0.1.1 ECH/HPKE feature, and RFC 8879 cert compression.
-v0.1.3 updates `oxihttp`/`oxihttp-server` dev-deps and fixes a rustdoc typed-fn warning in the aws-lc adapter.
-**424 tests** passing across 9 subcrates (~26 000 SLOC).
+v0.2.0 introduces the new `oxitls-native-certs` quarantine crate (OS-native certificate-store access via Security.framework/SChannel FFI), purifies `oxitls-webpki-roots` to Mozilla-roots-only (the `native-roots` feature is removed — it lived there before 0.2.0), and removes the `aws-lc` and `pkcs11` feature flags from the `oxitls` facade (those adapters remain as standalone opt-in crates).
+**392 tests** passing across 10 subcrates (~26 000 SLOC) (aws-lc adapter excluded from count).
 
 ## Why OxiTLS?
 
@@ -24,7 +24,8 @@ ecosystem-wide remediation for that contamination.
 |-------|---------|---------|
 | `oxitls-core` | Core traits, types, `OsRng` adapter | Yes |
 | `oxitls-adapter-rustls-rustcrypto` | Pure-Rust CryptoProvider | Yes |
-| `oxitls-webpki-roots` | Root store, intermediate cache, native roots | Yes |
+| `oxitls-webpki-roots` | Root store, intermediate cache (Mozilla roots only) | Yes |
+| `oxitls-native-certs` | OS-native certificate-store adapter (quarantine, opt-in) | No |
 | `oxitls-h2` | HTTP/2 over TLS (generic streams) | Optional |
 | `oxitls-rcgen` | Pure-Rust X.509 certificate generation | Optional |
 | `oxitls-adapter-aws-lc` | aws-lc-rs adapter (bounded FFI) | No (opt-in) |
@@ -36,18 +37,21 @@ ecosystem-wide remediation for that contamination.
 
 ```toml
 [dependencies]
-oxitls = "0.1.3"
+oxitls = "0.2.0"
 # Pure Rust TLS + WebPKI roots (default)
 # For HTTP/2:
-oxitls = { version = "0.1.3", features = ["h2"] }
+oxitls = { version = "0.2.0", features = ["h2"] }
 # For certificate generation:
-oxitls = { version = "0.1.3", features = ["rcgen"] }
-# For FIPS / high-throughput (C dependency, off by default):
-oxitls = { version = "0.1.3", features = ["aws-lc"] }
-# For HSM/TPM via PKCS#11 (C dependency, off by default):
-oxitls = { version = "0.1.3", features = ["pkcs11"] }
+oxitls = { version = "0.2.0", features = ["rcgen"] }
 # For post-quantum key exchange (X25519+ML-KEM-768):
-oxitls = { version = "0.1.3", features = ["post-quantum"] }
+oxitls = { version = "0.2.0", features = ["post-quantum"] }
+
+# For FIPS / high-throughput (C dependency — separate crate, not a facade feature):
+oxitls-adapter-aws-lc = "0.2.0"
+# For HSM/TPM via PKCS#11 (C dependency — separate crate, not a facade feature):
+oxitls-adapter-pkcs11 = "0.2.0"
+# For OS-native certificate store (FFI — quarantine crate, add directly):
+oxitls-native-certs = "0.2.0"
 ```
 
 ## Quick Start
@@ -141,11 +145,12 @@ let ca = generate_ca("My Root CA", SigningAlgorithm::EcdsaP256)?;
 - LRU intermediate certificate cache
 - Filtering, merging, and exclusion by fingerprint
 - Expiring roots support
-- Platform native root store (`native-roots` feature)
+- OS-native root store loading via the dedicated `oxitls-native-certs` quarantine crate (add directly when needed)
 
 ### Opt-In FFI Adapters
 - `oxitls-adapter-aws-lc`: aws-lc-rs CryptoProvider (FIPS, high throughput)
 - `oxitls-adapter-pkcs11`: HSM/TPM via cryptoki PKCS#11 (SoftHSM tested)
+- `oxitls-native-certs`: OS-native certificate-store adapter (Security.framework on macOS, SChannel on Windows, PEM bundle on Linux)
 
 ## Inter-Oxi Dependencies
 

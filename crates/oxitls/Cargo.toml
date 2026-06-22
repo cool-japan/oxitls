@@ -35,18 +35,12 @@ post-quantum = ["dep:oxitls-adapter-rustls-rustcrypto", "oxitls-adapter-rustls-r
 # Encrypted Client Hello (RFC 8449) support: real ECH config-list or GREASE mode.
 # Implies `pure`; wires HPKE suites from the adapter behind the `ech` sub-feature.
 ech = ["pure", "dep:oxitls-adapter-rustls-rustcrypto", "oxitls-adapter-rustls-rustcrypto/ech"]
-# Enable the aws-lc-rs backed CryptoProvider.  Opt-in only: default closure stays Pure Rust.
-aws-lc = ["dep:oxitls-adapter-aws-lc", "oxitls-adapter-aws-lc/aws-lc"]
-# Enable the PKCS#11 HSM/TPM signing adapter.  Opt-in only: default closure stays Pure Rust.
-pkcs11 = ["dep:oxitls-adapter-pkcs11", "oxitls-adapter-pkcs11/pkcs11"]
 # RFC 8879 TLS certificate compression backed by OxiARC pure-Rust zlib.
 cert-compression = ["dep:oxitls-adapter-rustls-rustcrypto", "oxitls-adapter-rustls-rustcrypto/cert-compression"]
 
 [dependencies]
 oxitls-core = { workspace = true }
 oxitls-adapter-rustls-rustcrypto = { workspace = true, optional = true }
-oxitls-adapter-aws-lc = { workspace = true, optional = true }
-oxitls-adapter-pkcs11 = { workspace = true, optional = true }
 oxitls-webpki-roots = { workspace = true, optional = true }
 oxitls-h2 = { workspace = true, optional = true }
 oxitls-rcgen = { workspace = true, optional = true }

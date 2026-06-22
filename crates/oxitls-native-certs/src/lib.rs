@@ -1,9 +1,16 @@
-//! Native (platform) root cert store loader — feature-gated.
+#![forbid(unsafe_code)]
+#![warn(missing_docs)]
+//! OxiTLS OS-native certificate-store adapter — a standalone, opt-in quarantine crate.
 //!
-//! Enabled with the `native-roots` feature flag. **Default features stay
-//! 100% Pure Rust** — this module pulls in `security-framework` (macOS) and
-//! `schannel` (Windows), both of which are platform FFI shims. Linux remains
-//! pure Rust (just reads PEM files).
+//! Loads the operating system's native root certificate store via platform FFI:
+//! `Security.framework` on macOS and SChannel on Windows. On Linux it reads the
+//! system PEM bundle, so the Linux path stays pure Rust.
+//!
+//! Because the macOS / Windows paths pull in platform FFI shims
+//! (`security-framework` / `schannel`), this functionality lives in its own
+//! impure-by-design quarantine crate **instead of** behind a feature flag. Apps
+//! that need OS-native trust roots depend on `oxitls-native-certs` directly; it
+//! is **not** feature-gated from `oxitls-webpki-roots`.
 //!
 //! All loaders are best-effort: malformed certificates in the host store are
 //! skipped rather than aborting the entire load.

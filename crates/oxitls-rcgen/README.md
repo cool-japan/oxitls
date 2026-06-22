@@ -11,14 +11,14 @@ The crate is **Pure Rust** (`#![forbid(unsafe_code)]`): key generation uses OS e
 
 ```toml
 [dependencies]
-oxitls-rcgen = "0.1.3"
+oxitls-rcgen = "0.2.0"
 ```
 
 Via the façade:
 
 ```toml
 [dependencies]
-oxitls = { version = "0.1.3", features = ["rcgen"] }
+oxitls = { version = "0.2.0", features = ["rcgen"] }
 ```
 
 ## Quick Start

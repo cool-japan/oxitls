@@ -6,6 +6,7 @@ members = [
     "crates/oxitls-adapter-aws-lc",
     "crates/oxitls-adapter-pkcs11",
     "crates/oxitls-webpki-roots",
+    "crates/oxitls-native-certs",
     "crates/oxitls",
     "crates/oxitls-h2",
     "crates/oxitls-rcgen",
@@ -16,7 +17,7 @@ exclude = [
 ]
 
 [workspace.package]
-version = "0.1.3"
+version = "0.2.0"
 edition = "2021"
 rust-version = "1.89"
 authors = ["COOLJAPAN OU (Team Kitasan)"]
@@ -26,14 +27,15 @@ description = "OxiTLS is the COOLJAPAN-blessed Pure Rust TLS transport stack."
 
 [workspace.dependencies]
 # crates in this workspace
-oxitls-core = { path = "crates/oxitls-core", version = "0.1.3" }
-oxitls-adapter-rustls-rustcrypto = { path = "crates/oxitls-adapter-rustls-rustcrypto", version = "0.1.3" }
-oxitls-adapter-aws-lc = { path = "crates/oxitls-adapter-aws-lc", version = "0.1.3" }
-oxitls-adapter-pkcs11 = { path = "crates/oxitls-adapter-pkcs11", version = "0.1.3" }
-oxitls-webpki-roots = { path = "crates/oxitls-webpki-roots", version = "0.1.3" }
-oxitls = { path = "crates/oxitls", version = "0.1.3" }
-oxitls-h2 = { path = "crates/oxitls-h2", version = "0.1.3" }
-oxitls-rcgen = { path = "crates/oxitls-rcgen", version = "0.1.3" }
+oxitls-core = { path = "crates/oxitls-core", version = "0.2.0" }
+oxitls-adapter-rustls-rustcrypto = { path = "crates/oxitls-adapter-rustls-rustcrypto", version = "0.2.0" }
+oxitls-adapter-aws-lc = { path = "crates/oxitls-adapter-aws-lc", version = "0.2.0" }
+oxitls-adapter-pkcs11 = { path = "crates/oxitls-adapter-pkcs11", version = "0.2.0" }
+oxitls-webpki-roots = { path = "crates/oxitls-webpki-roots", version = "0.2.0" }
+oxitls-native-certs = { path = "crates/oxitls-native-certs", version = "0.2.0" }
+oxitls = { path = "crates/oxitls", version = "0.2.0" }
+oxitls-h2 = { path = "crates/oxitls-h2", version = "0.2.0" }
+oxitls-rcgen = { path = "crates/oxitls-rcgen", version = "0.2.0" }
 # external -- default-features = false on rustls/tokio-rustls avoids the aws_lc_rs default
 rustls = { version = "0.23", default-features = false, features = ["std", "tls12"] }
 rustls-pemfile = { version = "2.2" }
@@ -104,7 +106,7 @@ x509-parser = { version = "0.18" }
 x25519-dalek = { version = "2", default-features = false, features = ["alloc", "static_secrets"] }
 # time crate (pure Rust) — used for expiration comparisons; "formatting" feature for Display impls
 time = { version = "0.3", default-features = false, features = ["std", "formatting", "parsing"] }
-# Platform native cert stores — feature-gated (native-roots), only enabled when explicitly requested
+# Platform native cert stores — consumed by the oxitls-native-certs quarantine crate (no longer feature-gated)
 security-framework = { version = "3" }
 # signature: RustCrypto signature traits — needed for OCSP/SCT cryptographic verification
 signature = { version = "3", default-features = false, features = ["alloc"] }
@@ -129,7 +131,7 @@ dhat = { version = "0.3" }
 # ring: C/FFI crypto (bench comparison only — never on normal dep edge; feature-gated)
 ring = { version = "0.17" }
 # oxihttp: COOLJAPAN HTTP client/server (bench dev-dep only)
-oxihttp = { version = "0.1.2", default-features = false }
+oxihttp = { version = "0.1.4", default-features = false }
 # oxicrypto cross-workspace published crates (dev-dep in oxitls-adapter-aws-lc wave8 test)
-oxicrypto-adapter-aws-lc = { version = "0.1.3" }
-oxicrypto-core = { version = "0.1.3" }
+oxicrypto-adapter-aws-lc = { version = "0.2.0" }
+oxicrypto-core = { version = "0.2.0" }

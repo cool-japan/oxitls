@@ -5,6 +5,52 @@ All notable changes to OxiTLS will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] - 2026-06-22
+
+### Security
+- Eliminates `security-framework-sys`, `core-foundation-sys`, and `windows-sys` from the
+  transitive dependency closure under `--all-features`.  The FFI surface was leaking through
+  the unconditional `native-roots` feature on `oxitls-webpki-roots` and through the `aws-lc`
+  / `pkcs11` optional features on the `oxitls` facade, violating Pure Rust Policy v2 L1.
+  This fix clears the violation for all downstream crates that depend on `oxitls` —
+  including `oxihttp`, `oxiquic`, and `oxisql`.
+
+### Added
+- New `oxitls-native-certs` quarantine crate: provides OS-native certificate-store access
+  via `Security.framework` (macOS) and `SChannel` (Windows).  Intentionally kept separate
+  so the FFI boundary is explicit and opt-in.  Apps that need to load system trust anchors
+  add `oxitls-native-certs` as a direct dependency; the rest of the `oxitls` workspace
+  stays 100% Pure Rust.
+
+### Removed
+- `aws-lc` and `pkcs11` optional features removed from the `oxitls` facade `Cargo.toml`,
+  along with the corresponding `dep:oxitls-adapter-aws-lc` / `dep:oxitls-adapter-pkcs11`
+  optional dependencies and the `oxitls::aws_lc` re-export module.  Apps that need the
+  aws-lc-rs or PKCS#11 providers must now depend on `oxitls-adapter-aws-lc` /
+  `oxitls-adapter-pkcs11` directly.
+- `native-roots` feature removed from `oxitls-webpki-roots` `Cargo.toml`.  The feature was
+  a no-op gate: `security-framework` and `schannel` were always linked regardless of whether
+  the feature was enabled.  The implementation (`native_roots.rs`, ~203 lines) and its
+  `load_native_roots` re-export have been moved to `oxitls-native-certs`.
+- Unconditional `tokio`, `security-framework`, and `schannel` dependencies removed from
+  `oxitls-webpki-roots`; `tokio` dev-dependency also removed.
+
+### Changed
+- `oxitls-webpki-roots` is now Mozilla-roots-only: it provides `webpki-roots`-backed root
+  stores, expiring-roots helpers, and the intermediate-cert cache — all without any
+  platform-native or FFI dependency.
+- Apps needing native CA trust anchors: add `oxitls-native-certs` and call
+  `oxitls_native_certs::load_native_roots(...)` directly instead of
+  `oxitls_webpki_roots::load_native_roots(...)`.
+- Apps needing aws-lc-rs or PKCS#11 crypto: depend on `oxitls-adapter-aws-lc` or
+  `oxitls-adapter-pkcs11` directly rather than enabling the (now-removed) facade features.
+
+---
+
+## [0.1.4] - Unreleased
+
+---
+
 ## [0.1.3] - 2026-06-19
 
 ### Changed

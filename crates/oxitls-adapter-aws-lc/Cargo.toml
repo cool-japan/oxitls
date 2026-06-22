@@ -15,10 +15,10 @@ default = []
 # Enables the aws-lc-rs CryptoProvider via rustls's built-in aws_lc_rs feature.
 # This feature-gates C/FFI code — the default closure remains Pure Rust.
 aws-lc = ["rustls/aws_lc_rs", "dep:aws-lc-rs"]
-# Gate for the wave9 end-to-end HTTPS integration test (`tests/wave9_https.rs`).
-# Currently off because its `oxihttp-server` dev-dep is disabled pending an
-# oxihttp 0.1.1+ release (diamond dep on oxitls-core). Re-enable both together.
-oxihttp-test = []
+# NOTE: oxihttp-test feature intentionally absent — wave9_https.rs depends on
+# oxihttp-server which is disabled pending a diamond-dep resolution on oxitls-core.
+# Re-add both this feature and the oxihttp-server dev-dep together when oxihttp
+# publishes a version that depends on oxitls ^0.2.0+.
 
 [dependencies]
 oxitls-core = { workspace = true }
@@ -66,3 +66,10 @@ secrecy = { workspace = true }
 # dev-deps are stripped on cargo publish, so cross-workspace registry deps are safe here.
 oxicrypto-adapter-aws-lc = { workspace = true, features = ["aws-lc"] }
 oxicrypto-core           = { workspace = true }
+
+[lints.rust]
+# oxihttp-test is a parked integration-test feature: the dep is commented out until
+# oxihttp ships a version that depends on oxitls ^0.2.x (diamond dep blocker).
+# check-cfg teaches rustc that this cfg value is intentional, without adding it to
+# [features] (which would activate it under --all-features and break compilation).
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(feature, values("oxihttp-test"))'] }

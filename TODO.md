@@ -1,10 +1,10 @@
 # OxiTLS TODO
 
-## Status — v0.1.3 (work in progress)
+## Status — v0.2.0 — 2026-06-22
 
 Pure-Rust TLS transport stack at ~26 000 SLOC across 9 subcrates. All M0–M5
 milestones and Waves 6–9 complete, plus ECH/HPKE (RFC 9180) and RFC 8879 cert compression added in v0.1.1.
-**424 tests passing** (10 skipped — PKCS#11 SoftHSM + ignored ignores).
+**392 tests passing** (aws-lc adapter excluded from count).
 
 Release-check performed 2026-06-01 (v0.1.0):
 - cargo check: PASS
@@ -46,6 +46,14 @@ Release-check performed 2026-06-19 (v0.1.3):
 - pub_oxitls.sh VERSION=0.1.3, license header: Apache-2.0
 - cargo publish --dry-run oxitls-core: PASS (cascade failures for dependents expected pre-publish)
 
+Release-check performed 2026-06-22 (v0.2.0):
+- cargo nextest run --workspace --all-features --exclude oxitls-adapter-aws-lc: 392 passed
+- New: oxitls-native-certs quarantine crate — OS-native cert-store loading (Security.framework / SChannel / Linux PEM bundle)
+- Purified oxitls-webpki-roots: native-roots feature removed; 100% Pure Rust
+- Removed aws-lc and pkcs11 feature flags from oxitls facade (adapters remain as standalone crates)
+- CHANGELOG.md updated with 0.2.0 entry
+- README.md updated: test count, crate table, version references
+
 ## Core Implementation
 - [x] 0-RTT early data support in ClientBuilder and ServerBuilder (~200 SLOC)
 - [x] OCSP stapling: server-side response injection and client-side verification (~160 SLOC)
@@ -75,6 +83,7 @@ Release-check performed 2026-06-19 (v0.1.3):
 - [x] H2 settings builder for window size, frame size, concurrent streams (~100 SLOC)
 - [x] Root store builder with filtering, merging, and native roots (~200 SLOC)
 - [x] Intermediate certificate caching in webpki-roots (~300 SLOC)
+- [x] Add platform native root store loading (macOS Keychain, Linux /etc/ssl/certs) — moved out of the `native-roots` feature into the standalone `oxitls-native-certs` quarantine crate (~150 SLOC)
 - [x] `OxiRsa2048Key::from_pkcs8_der` / `OxiRsa4096Key::from_pkcs8_der` for test fixtures (2026-06-01)
 - [x] `self_signed_from_rsa2048_key` / `self_signed_from_rsa4096_key` API helpers (2026-06-01)
 
@@ -140,3 +149,4 @@ Release-check performed 2026-06-19 (v0.1.3):
 - [x] v0.1.0 release-check (2026-06-01): all tests green, CHANGELOG, README, LICENSE, doc fixes, publish dry-run
 - [x] v0.1.1 release-check (2026-06-03): 339 tests, ECH/HPKE KATs, cert-compression, hybrid PKCS11+aws-lc, version bump
 - [x] v0.1.2 release-check (2026-06-10): 424 passed, 10 skipped; wave8 coexist test activated; CHANGELOG/README/TODO finalized; dry-run expected-fail (deps not yet published)
+- [x] v0.2.0 release-check (2026-06-22): 392 tests (aws-lc adapter excluded); oxitls-native-certs quarantine crate shipped; oxitls-webpki-roots purified to Mozilla-only; facade aws-lc/pkcs11 features removed
