@@ -7,6 +7,7 @@ license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
 description = "OxiTLS OS-native certificate-store adapter (Security.framework / SChannel FFI, opt-in quarantine crate)"
+readme = "README.md"
 categories = ["cryptography", "network-programming"]
 keywords = ["tls", "rustls", "native-certs", "cooljapan", "oxitls"]
 

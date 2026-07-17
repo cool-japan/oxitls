@@ -20,7 +20,7 @@ use criterion::{criterion_group, criterion_main, BatchSize, BenchmarkId, Criteri
 // ── RustCrypto ────────────────────────────────────────────────────────────────
 
 use aes_gcm::{
-    aead::{AeadInPlace, KeyInit},
+    aead::{AeadInOut, KeyInit},
     Aes128Gcm, Aes256Gcm,
 };
 use chacha20poly1305::ChaCha20Poly1305;
@@ -58,10 +58,9 @@ fn bench_aes128gcm_per_suite(c: &mut Criterion) {
 
         // OxiCrypto / RustCrypto
         {
-            use aes_gcm::{Key, Nonce};
-            let key = Key::<Aes128Gcm>::from_slice(&KEY_128);
-            let cipher = Aes128Gcm::new(key);
-            let nonce = Nonce::from_slice(&NONCE_BYTES);
+            use aes_gcm::Nonce;
+            let cipher = Aes128Gcm::new_from_slice(&KEY_128).expect("aes128gcm key");
+            let nonce = Nonce::from(NONCE_BYTES);
 
             group.bench_with_input(BenchmarkId::new("oxicrypto", size), &size, |b, &sz| {
                 let payload = vec![0u8; sz];
@@ -69,7 +68,7 @@ fn bench_aes128gcm_per_suite(c: &mut Criterion) {
                     || payload.clone(),
                     |mut buf| {
                         let tag = cipher
-                            .encrypt_in_place_detached(nonce, b"", &mut buf)
+                            .encrypt_inout_detached(&nonce, b"", (&mut buf[..]).into())
                             .expect("aes128gcm oxicrypto encrypt");
                         std::hint::black_box(tag);
                     },
@@ -133,10 +132,9 @@ fn bench_aes256gcm_per_suite(c: &mut Criterion) {
 
         // OxiCrypto / RustCrypto
         {
-            use aes_gcm::{Key, Nonce};
-            let key = Key::<Aes256Gcm>::from_slice(&KEY_256);
-            let cipher = Aes256Gcm::new(key);
-            let nonce = Nonce::from_slice(&NONCE_BYTES);
+            use aes_gcm::Nonce;
+            let cipher = Aes256Gcm::new_from_slice(&KEY_256).expect("aes256gcm key");
+            let nonce = Nonce::from(NONCE_BYTES);
 
             group.bench_with_input(BenchmarkId::new("oxicrypto", size), &size, |b, &sz| {
                 let payload = vec![0u8; sz];
@@ -144,7 +142,7 @@ fn bench_aes256gcm_per_suite(c: &mut Criterion) {
                     || payload.clone(),
                     |mut buf| {
                         let tag = cipher
-                            .encrypt_in_place_detached(nonce, b"", &mut buf)
+                            .encrypt_inout_detached(&nonce, b"", (&mut buf[..]).into())
                             .expect("aes256gcm oxicrypto encrypt");
                         std::hint::black_box(tag);
                     },
@@ -208,10 +206,10 @@ fn bench_chacha20_per_suite(c: &mut Criterion) {
 
         // OxiCrypto / RustCrypto
         {
-            use chacha20poly1305::{Key, Nonce};
-            let key = Key::from_slice(&KEY_CHACHA);
-            let cipher = ChaCha20Poly1305::new(key);
-            let nonce = Nonce::from_slice(&NONCE_BYTES);
+            use chacha20poly1305::Nonce;
+            let cipher =
+                ChaCha20Poly1305::new_from_slice(&KEY_CHACHA).expect("chacha20poly1305 key");
+            let nonce = Nonce::from(NONCE_BYTES);
 
             group.bench_with_input(BenchmarkId::new("oxicrypto", size), &size, |b, &sz| {
                 let payload = vec![0u8; sz];
@@ -219,7 +217,7 @@ fn bench_chacha20_per_suite(c: &mut Criterion) {
                     || payload.clone(),
                     |mut buf| {
                         let tag = cipher
-                            .encrypt_in_place_detached(nonce, b"", &mut buf)
+                            .encrypt_inout_detached(&nonce, b"", (&mut buf[..]).into())
                             .expect("chacha20poly1305 oxicrypto encrypt");
                         std::hint::black_box(tag);
                     },

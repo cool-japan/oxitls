@@ -5,11 +5,12 @@ OxiTLS is the COOLJAPAN-blessed Pure Rust TLS transport stack. It provides TLS
 the default-feature path, while still offering opt-in `ffi` adapters for FIPS or
 high-throughput consumers who knowingly accept the C dependency.
 
-## Status: v0.2.0 — 2026-06-22
+## Status: v0.2.1 — 2026-07-17
 
 All M0–M5 milestones complete, plus Waves 6–9, the v0.1.1 ECH/HPKE feature, and RFC 8879 cert compression.
-v0.2.0 introduces the new `oxitls-native-certs` quarantine crate (OS-native certificate-store access via Security.framework/SChannel FFI), purifies `oxitls-webpki-roots` to Mozilla-roots-only (the `native-roots` feature is removed — it lived there before 0.2.0), and removes the `aws-lc` and `pkcs11` feature flags from the `oxitls` facade (those adapters remain as standalone opt-in crates).
-**392 tests** passing across 10 subcrates (~26 000 SLOC) (aws-lc adapter excluded from count).
+v0.2.0 introduced the new `oxitls-native-certs` quarantine crate (OS-native certificate-store access via Security.framework/SChannel FFI), purified `oxitls-webpki-roots` to Mozilla-roots-only (the `native-roots` feature is removed — it lived there before 0.2.0), and removed the `aws-lc` and `pkcs11` feature flags from the `oxitls` facade (those adapters remain as standalone opt-in crates).
+v0.2.1 is a security-hardening release: it eliminates **RUSTSEC-2026-0104** (a `rustls-webpki` CRL-parsing panic) by forking the Pure-Rust CryptoProvider into a new in-workspace crate, `oxitls-rustcrypto-provider` — the vulnerable `webpki`/`rustls-webpki` dependency is removed entirely, and the swap is transparent to consumers via a Cargo `package =` rename, so `oxitls-adapter-rustls-rustcrypto` keeps compiling against the same `rustls_rustcrypto::` extern name. It also hardens OCSP staple validation (binds `CertID` — issuer hash + serial — to the certificate actually being verified, and enforces `thisUpdate`/`nextUpdate` freshness) and fixes SCT (Certificate Transparency) parsing, where `extract_sct_extension` now correctly strips the RFC 6962 DER `OCTET STRING` wrapper before parsing.
+**358 tests** passing with default features (**443** with `--all-features`), zero clippy/compiler/rustdoc warnings, across **11 workspace crates** (27,748 SLOC).
 
 ## Why OxiTLS?
 
@@ -24,6 +25,7 @@ ecosystem-wide remediation for that contamination.
 |-------|---------|---------|
 | `oxitls-core` | Core traits, types, `OsRng` adapter | Yes |
 | `oxitls-adapter-rustls-rustcrypto` | Pure-Rust CryptoProvider | Yes |
+| `oxitls-rustcrypto-provider` | Pure-Rust RustCrypto CryptoProvider fork (RUSTSEC-2026-0104 fix) | Yes |
 | `oxitls-webpki-roots` | Root store, intermediate cache (Mozilla roots only) | Yes |
 | `oxitls-native-certs` | OS-native certificate-store adapter (quarantine, opt-in) | No |
 | `oxitls-h2` | HTTP/2 over TLS (generic streams) | Optional |
@@ -37,21 +39,21 @@ ecosystem-wide remediation for that contamination.
 
 ```toml
 [dependencies]
-oxitls = "0.2.0"
+oxitls = "0.2.1"
 # Pure Rust TLS + WebPKI roots (default)
 # For HTTP/2:
-oxitls = { version = "0.2.0", features = ["h2"] }
+oxitls = { version = "0.2.1", features = ["h2"] }
 # For certificate generation:
-oxitls = { version = "0.2.0", features = ["rcgen"] }
+oxitls = { version = "0.2.1", features = ["rcgen"] }
 # For post-quantum key exchange (X25519+ML-KEM-768):
-oxitls = { version = "0.2.0", features = ["post-quantum"] }
+oxitls = { version = "0.2.1", features = ["post-quantum"] }
 
 # For FIPS / high-throughput (C dependency — separate crate, not a facade feature):
-oxitls-adapter-aws-lc = "0.2.0"
+oxitls-adapter-aws-lc = "0.2.1"
 # For HSM/TPM via PKCS#11 (C dependency — separate crate, not a facade feature):
-oxitls-adapter-pkcs11 = "0.2.0"
+oxitls-adapter-pkcs11 = "0.2.1"
 # For OS-native certificate store (FFI — quarantine crate, add directly):
-oxitls-native-certs = "0.2.0"
+oxitls-native-certs = "0.2.1"
 ```
 
 ## Quick Start

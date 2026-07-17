@@ -3,7 +3,7 @@
 [![Crates.io](https://img.shields.io/crates/v/oxitls-adapter-rustls-rustcrypto.svg)](https://crates.io/crates/oxitls-adapter-rustls-rustcrypto)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
-`oxitls-adapter-rustls-rustcrypto` is the **default Pure-Rust crypto backend** for the OxiTLS stack. It wires rustls to the [`rustls-rustcrypto`](https://crates.io/crates/rustls-rustcrypto) `CryptoProvider` — a 100% Rust implementation of TLS cryptography built on the RustCrypto crates (`p256`, `p384`, `ed25519-dalek`, `rsa`, `sha2`, …). No C, C++, or Fortran code enters the build closure: there is no `ring`, no `aws-lc-rs`, and no OpenSSL/libssl.
+`oxitls-adapter-rustls-rustcrypto` is the **default Pure-Rust crypto backend** for the OxiTLS stack. It wires rustls to a `rustls-rustcrypto`-compatible `CryptoProvider` — a 100% Rust implementation of TLS cryptography built on the RustCrypto crates (`p256`, `p384`, `ed25519-dalek`, `rsa`, `sha2`, …). As of 0.2.1, the `rustls-rustcrypto` workspace dependency resolves to [`oxitls-rustcrypto-provider`](https://crates.io/crates/oxitls-rustcrypto-provider), an in-workspace fork of upstream [`rustls-rustcrypto`](https://crates.io/crates/rustls-rustcrypto) that removes the `rustls-webpki` dependency to eliminate RUSTSEC-2026-0104 (a CRL-parsing panic); the swap is transparent — this crate still imports the unchanged `rustls_rustcrypto::` extern name and no source changes were required here. No C, C++, or Fortran code enters the build closure: there is no `ring`, no `aws-lc-rs`, and no OpenSSL/libssl.
 
 This crate provides everything needed to stand up a TLS client or server on the Pure-Rust provider: a per-config provider factory (it **never** calls `CryptoProvider::install_default()` — the provider is always injected per `ClientConfig`/`ServerConfig`), fluent `ClientConfig`/`ServerConfig` builders, `tokio-rustls`-backed connector/acceptor types, and a rich `verifier` module covering certificate pinning, CRL revocation, client-side OCSP stapling, Certificate Transparency (SCT) verification, and RFC 7250 raw public keys. The optional `post-quantum` feature reserves the namespace for the X25519MLKEM768 hybrid key-exchange group.
 
@@ -11,10 +11,10 @@ This crate provides everything needed to stand up a TLS client or server on the 
 
 ```toml
 [dependencies]
-oxitls-adapter-rustls-rustcrypto = "0.2.0"
+oxitls-adapter-rustls-rustcrypto = "0.2.1"
 
 # With the post-quantum hybrid KX namespace (X25519MLKEM768):
-oxitls-adapter-rustls-rustcrypto = { version = "0.2.0", features = ["post-quantum"] }
+oxitls-adapter-rustls-rustcrypto = { version = "0.2.1", features = ["post-quantum"] }
 ```
 
 Most users should depend on the [`oxitls`](https://crates.io/crates/oxitls) facade instead, which re-exports this crate behind its default `pure` feature.
@@ -148,7 +148,7 @@ Custom server/client certificate verifiers, each implementing the relevant rustl
 | `CrlAwareServerVerifier` | struct | CRL-backed revocation via `WebPkiServerVerifier` |
 | `CustomServerVerifier` | struct | Inner verifier + a caller-supplied `CertPredicate` closure |
 | `CertPredicate` | type alias | `dyn Fn(&CertificateDer, &[CertificateDer]) -> Result<ServerCertVerified, Error>` |
-| `OcspClientVerifier` | struct | Client-side OCSP-staple validation (RFC 6960) wrapping an inner verifier |
+| `OcspClientVerifier` | struct | Client-side OCSP-staple validation (RFC 6960) wrapping an inner verifier — binds each response's `CertID` (recomputed issuer-name-hash/issuer-key-hash across id-sha1/sha256/sha384/sha512, plus serial number) to the certificate actually being verified, and enforces `thisUpdate`/`nextUpdate` freshness before trusting a `Good`/`Unknown` status |
 | `OcspClientPolicy` | enum | `Disabled`, `SoftFail`, `HardRequire` |
 | `SctVerifier` | struct | Certificate Transparency SCT verification (RFC 6962) with cryptographic signature checks |
 | `SctPolicy` | enum | `Disabled`, `Permissive { min_distinct_logs }`, `Strict { min_distinct_logs }` |
@@ -216,6 +216,7 @@ All fallible functions return [`oxitls_core::TlsError`](https://crates.io/crates
 ## Cross-references
 
 - [`oxitls`](https://crates.io/crates/oxitls) — the Pure-Rust TLS facade; re-exports this adapter behind its `pure` feature.
+- [`oxitls-rustcrypto-provider`](https://crates.io/crates/oxitls-rustcrypto-provider) — the in-workspace `CryptoProvider` fork (RUSTSEC-2026-0104 fix) that `rustls-rustcrypto` resolves to; backs `pure_provider()`.
 - [`oxitls-core`](https://crates.io/crates/oxitls-core) — shared traits and types (`TlsError`, `ConnectionInfo`, `KeyLogPolicy`, `TlsConnector`, `TlsAcceptor`, `TlsStreamInfo`).
 - [`oxitls-webpki-roots`](https://crates.io/crates/oxitls-webpki-roots) — Mozilla CA bundle and `IntermediateCertCache`.
 - [`oxitls-rcgen`](https://crates.io/crates/oxitls-rcgen) — Pure-Rust certificate generation.

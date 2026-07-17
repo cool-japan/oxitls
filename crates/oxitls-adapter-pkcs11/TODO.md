@@ -2,23 +2,28 @@
 
 ## Status
 
-Core signing scaffold is implemented (~290 SLOC across `src/`). The `pkcs11`
-feature gate pulls in the `cryptoki` crate (PKCS#11 v2.40 Rust bindings).
+Production adapter, fully implemented (~1,150 SLOC across `src/`). The `pkcs11`
+feature gate pulls in the `cryptoki` crate (PKCS#11 v2.40 Rust bindings); default
+features stay empty so merely depending on the crate pulls in no FFI code.
 
-**Already implemented:**
-- `Pkcs11SigningKey` implementing `rustls::sign::SigningKey` (signer.rs)
-- `Pkcs11Signer` implementing `rustls::sign::Signer` for ECDSA-P256/P384 and
-  RSA-PKCS1 / RSA-PSS-SHA{256,384,512} (signer.rs)
-- ECDSA raw r||s → DER/ASN.1 conversion helper (signer.rs)
+**Implemented** (every item originally tracked here — see Core Implementation /
+API Improvements / Testing / Performance / Integration below, all checked off):
+- `Pkcs11SigningKey` / `Pkcs11Signer` implementing `rustls::sign::{SigningKey, Signer}`
+  for ECDSA-P256/P384 and RSA-PKCS1 / RSA-PSS-SHA{256,384,512} (signer.rs)
+- `Pkcs11ServerCertResolver` implementing `rustls::server::ResolvesServerCert`, with
+  SNI dispatch (exact + wildcard matching per RFC 6125 §6.4.3, strict-SNI mode)
+  (resolver.rs)
+- `Pkcs11SessionPool` / `PooledSession` bounded session pool for concurrent TLS
+  handshakes (pool.rs)
+- `Pkcs11TlsProvider` high-level builder: `new(lib_path, slot, pin)` →
+  `server_config(...)` / `server_config_sni(...)` (provider.rs)
+- ECDSA raw r‖s → DER/ASN.1 conversion helper (signer.rs)
 - `session.rs`: `open_user_session`, `find_private_key_by_label`, `probe_key_type`
-- `error.rs`: `PkcsSignError` with Display/Error impls
-- `tests/softhsm.rs`: headless error-type test + `#[ignore]` SoftHSM2 round-trip test
-
-**Not yet implemented:**
-- `Pkcs11ServerCertResolver` (reads CKO_CERTIFICATE objects and pairs with signing key)
-- `Pkcs11TlsProvider` convenience builder (`new(lib_path, slot, pin)` → `ServerConfig`)
-- Session pool for concurrent TLS handshakes
-- `oxitls` facade re-export behind `pkcs11` feature flag
+- `error.rs`: production `Pkcs11Error` + legacy `PkcsSignError` (Display/Error impls,
+  `From<PkcsSignError> for Pkcs11Error`)
+- `tests/softhsm.rs`, `tests/pkcs11_hardening.rs`, `tests/wave8_pkcs11.rs`: headless
+  tests plus `#[ignore]`-gated SoftHSM2 integration tests (session-pool concurrency,
+  SNI dispatch, full TLS 1.3 handshake)
 
 ## Design Questions (resolve before implementation)
 
@@ -29,8 +34,10 @@ feature gate pulls in the `cryptoki` crate (PKCS#11 v2.40 Rust bindings).
   Use an `Arc<Mutex<Vec<Session>>>` pool or per-thread sessions via `thread_local!`.
 - Login policy: `USER_PIN` vs `CKU_CONTEXT_SPECIFIC` for protected-authentication-path
   HSMs. Expose as `LoginMode::Pin(SecretString)` vs `LoginMode::ProtectedPath`.
-- RSA-PSS: currently falls back to `Sha{256,384,512}RsaPkcs` — needs
-  `RsaPkcsPss` mechanism with explicit salt-length params for true PSS signing.
+- RSA-PSS: **resolved** — `scheme_to_mechanism` dispatches to `Mechanism::RsaPkcsPss`
+  with explicit `PkcsPssParams` (salt length = hash output length) for true PSS
+  signing; see Core Implementation below. (Originally fell back to
+  `Sha{256,384,512}RsaPkcs`, which is PKCS#1v1.5-only.)
 - Test strategy: SoftHSM2 (C library, separate process) vs a Pure-Rust PKCS#11 mock.
   SoftHSM2 requires system-level installation; prefer a mock for CI portability.
 
@@ -105,7 +112,11 @@ feature gate pulls in the `cryptoki` crate (PKCS#11 v2.40 Rust bindings).
 ## Integration
 
 - [x] Wire `Pkcs11TlsProvider` into `oxitls` facade behind `pkcs11` feature flag:
-  `oxitls::pkcs11::provider(lib_path, slot, pin)` re-export (~15 SLOC)
+  `oxitls::pkcs11::provider(lib_path, slot, pin)` re-export (~15 SLOC). **Superseded
+  in v0.2.0** (2026-06-22): the `pkcs11` feature and `oxitls::pkcs11` re-export were
+  removed from the `oxitls` facade entirely (Pure Rust Policy v2 L1 — the FFI surface
+  was leaking through the facade's optional features); apps now depend on
+  `oxitls-adapter-pkcs11` directly, as this crate's README documents.
 - [x] Add integration guide in crate docs: SoftHSM2 setup section added to
   `src/lib.rs` module-level doc comment (Wave 5, 2026-05-27)
 - [x] SNI dispatcher: `with_sni_map` constructor implemented; strict-SNI (no fallback)

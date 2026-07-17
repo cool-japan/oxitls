@@ -24,10 +24,8 @@
 use std::sync::RwLock;
 
 use aes_gcm::{
-    aead::{
-        generic_array::typenum::consts::U16, generic_array::GenericArray, AeadInPlace, KeyInit,
-    },
-    Aes256Gcm, Key, Nonce,
+    aead::{AeadInOut, KeyInit},
+    Aes256Gcm, Nonce, Tag,
 };
 use getrandom::fill as random_fill;
 
@@ -155,12 +153,11 @@ fn encrypt_with_key(key_bytes: &[u8; KEY_LEN], plain: &[u8]) -> Option<Vec<u8>> 
     let cipher_start = 1 + NONCE_LEN;
     let cipher_end = cipher_start + plain.len();
 
-    let key = Key::<Aes256Gcm>::from_slice(key_bytes);
-    let cipher = Aes256Gcm::new(key);
-    let nonce = Nonce::from_slice(&nonce_bytes);
+    let cipher = Aes256Gcm::new_from_slice(key_bytes).ok()?;
+    let nonce = Nonce::try_from(nonce_bytes.as_slice()).ok()?;
 
     let tag = cipher
-        .encrypt_in_place_detached(nonce, AAD, &mut out[cipher_start..cipher_end])
+        .encrypt_inout_detached(&nonce, AAD, (&mut out[cipher_start..cipher_end]).into())
         .ok()?;
     out.extend_from_slice(&tag);
     Some(out)
@@ -183,16 +180,15 @@ fn decrypt_with_key(key_bytes: &[u8; KEY_LEN], ticket: &[u8]) -> Option<Vec<u8>>
     }
     let pt_len = ct_and_tag.len() - TAG_LEN;
 
-    let key = Key::<Aes256Gcm>::from_slice(key_bytes);
-    let cipher = Aes256Gcm::new(key);
-    let nonce = Nonce::from_slice(nonce_bytes);
+    let cipher = Aes256Gcm::new_from_slice(key_bytes).ok()?;
+    let nonce = Nonce::try_from(nonce_bytes).ok()?;
 
     let tag_slice = &ct_and_tag[pt_len..];
-    let tag = GenericArray::<u8, U16>::clone_from_slice(tag_slice);
+    let tag = Tag::try_from(tag_slice).ok()?;
 
     let mut buf: Vec<u8> = ct_and_tag[..pt_len].to_vec();
     cipher
-        .decrypt_in_place_detached(nonce, AAD, &mut buf, &tag)
+        .decrypt_inout_detached(&nonce, AAD, (&mut buf[..]).into(), &tag)
         .ok()?;
     Some(buf)
 }

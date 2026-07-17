@@ -52,9 +52,9 @@ impl AeadSuite for AeadAes128Gcm {
         let cipher = Aes128Gcm::new_from_slice(key)
             .map_err(|_| rustls::Error::General("HPKE AES-128-GCM: invalid key length".into()))?;
 
-        let nonce_arr = Nonce::from_slice(nonce.as_slice());
+        let nonce_arr = Nonce::from(*nonce);
         cipher
-            .encrypt(nonce_arr, aes_gcm::aead::Payload { msg: pt, aad })
+            .encrypt(&nonce_arr, aes_gcm::aead::Payload { msg: pt, aad })
             .map_err(|_| rustls::Error::General("HPKE AES-128-GCM: encryption failed".into()))
     }
 
@@ -65,9 +65,9 @@ impl AeadSuite for AeadAes128Gcm {
         let cipher = Aes128Gcm::new_from_slice(key)
             .map_err(|_| rustls::Error::General("HPKE AES-128-GCM: invalid key length".into()))?;
 
-        let nonce_arr = Nonce::from_slice(nonce.as_slice());
+        let nonce_arr = Nonce::from(*nonce);
         cipher
-            .decrypt(nonce_arr, aes_gcm::aead::Payload { msg: ct, aad })
+            .decrypt(&nonce_arr, aes_gcm::aead::Payload { msg: ct, aad })
             .map_err(|_| {
                 rustls::Error::General(
                     "HPKE AES-128-GCM: decryption failed (bad tag or data)".into(),
@@ -95,9 +95,9 @@ impl AeadSuite for AeadChacha20 {
             rustls::Error::General("HPKE ChaCha20Poly1305: invalid key length".into())
         })?;
 
-        let nonce_arr = Nonce::from_slice(nonce.as_slice());
+        let nonce_arr = Nonce::from(*nonce);
         cipher
-            .encrypt(nonce_arr, chacha20poly1305::aead::Payload { msg: pt, aad })
+            .encrypt(&nonce_arr, chacha20poly1305::aead::Payload { msg: pt, aad })
             .map_err(|_| rustls::Error::General("HPKE ChaCha20Poly1305: encryption failed".into()))
     }
 
@@ -109,9 +109,9 @@ impl AeadSuite for AeadChacha20 {
             rustls::Error::General("HPKE ChaCha20Poly1305: invalid key length".into())
         })?;
 
-        let nonce_arr = Nonce::from_slice(nonce.as_slice());
+        let nonce_arr = Nonce::from(*nonce);
         cipher
-            .decrypt(nonce_arr, chacha20poly1305::aead::Payload { msg: ct, aad })
+            .decrypt(&nonce_arr, chacha20poly1305::aead::Payload { msg: ct, aad })
             .map_err(|_| {
                 rustls::Error::General(
                     "HPKE ChaCha20Poly1305: decryption failed (bad tag or data)".into(),

@@ -7,6 +7,7 @@ license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
 description = "OxiTLS adapter: rustls + RustCrypto CryptoProvider (pure Rust TLS)"
+readme = "README.md"
 categories = ["cryptography", "network-programming"]
 keywords = ["tls", "rustls", "rustcrypto", "pure-rust", "cooljapan"]
 
@@ -33,6 +34,9 @@ p384 = { workspace = true }
 ed25519-dalek = { workspace = true, features = ["alloc"] }
 rsa = { workspace = true }
 sha2 = { version = "0.11", default-features = false, features = ["oid"] }
+# SHA-1 is required to recompute OCSP CertID issuer hashes: RFC 6960 responders
+# overwhelmingly use id-sha1 as the CertID hashAlgorithm. Pure Rust (RustCrypto).
+sha1 = { workspace = true }
 signature = { workspace = true }
 x509-ocsp = { workspace = true }
 der = { workspace = true }
@@ -54,7 +58,7 @@ oxiarc-deflate = { workspace = true, optional = true }
 [dev-dependencies]
 rcgen = { workspace = true, features = ["crypto", "pem", "ring"] }
 tokio = { workspace = true, features = ["full", "macros"] }
-oxitls-webpki-roots = { workspace = true }
+oxitls-webpki-roots = { path = "../oxitls-webpki-roots" }
 sha2 = { version = "0.11", default-features = false, features = ["oid"] }
 oxitls-rcgen = { path = "../oxitls-rcgen" }
 criterion = { workspace = true }

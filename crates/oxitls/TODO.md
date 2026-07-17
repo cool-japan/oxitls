@@ -9,7 +9,10 @@ protocol versions, session ticketer), `OxiTicketer` (AES-256-GCM session ticket
 encryptor with key rotation), `connector_with_webpki_roots()` convenience function,
 and re-exports for `h2` and `rcgen_bridge`. Comprehensive integration tests for TLS
 1.3 server, mTLS, ALPN, SNI, TLS 1.2 fallback, session resumption, and ticket
-resumption.
+resumption. 90 tests passing (default features) / 105 passing (all-features),
+zero failures/warnings (0.2.1). No direct API changes in 0.2.1; the facade
+transitively picks up the adapter's OCSP/SCT verifier hardening and the
+RUSTSEC-2026-0104 fix (see `CHANGELOG.md` `[0.2.1]`).
 
 ## Core Implementation
 - [x] Add 0-RTT (early data) support: `ClientBuilder::with_early_data()` and `OxiTlsStream::early_data()` accessor — Wave 5 Slice C (wave5_early_data_transit.rs, 3 tests)

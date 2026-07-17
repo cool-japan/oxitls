@@ -1,9 +1,12 @@
 # oxitls-webpki-roots TODO
 
 ## Status
-Root store management crate (~250 SLOC) with `webpki_root_certs()` (OnceLock-cached),
+Root store management crate (~490 SLOC across `lib.rs`, `expiring.rs`,
+`intermediate_cache.rs`) with `webpki_root_certs()` (OnceLock-cached),
 `RootStoreBuilder` (add_pem/add_der/exclude_fingerprint), `TrustAnchorInfo` for
-introspection, filtered root loading, and root store merging.
+introspection, filtered root loading, root store merging, an `expiring` module for
+root-expiration checks, and an LRU `IntermediateCertCache` for intermediate
+certificate caching.
 
 ## Core Implementation
 - [x] Add `webpki_root_certs_filtered(filter: impl Fn(&TrustAnchor) -> bool) -> RootCertStore` for selective root inclusion (~40 SLOC)

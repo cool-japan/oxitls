@@ -5,6 +5,74 @@ All notable changes to OxiTLS will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.1] - 2026-07-17
+
+### Security
+- **RUSTSEC-2026-0104** (rustls-webpki 0.102.x CRL-parsing panic) is eliminated from the
+  Pure Rust dependency graph. The `rustls-rustcrypto` workspace dependency now resolves to a
+  new in-workspace crate, `oxitls-rustcrypto-provider` — an in-oxitls fork of
+  `rustls-rustcrypto` 0.0.2-alpha with the `webpki` / `rustls-webpki` dependency removed
+  entirely; certificate and signature algorithm identifiers are routed through
+  `rustls-pki-types::alg_id` instead. The swap is transparent to callers: the workspace
+  `Cargo.toml` renames the dependency
+  (`rustls-rustcrypto = { package = "oxitls-rustcrypto-provider", ... }`), so
+  `oxitls-adapter-rustls-rustcrypto` keeps compiling against the unchanged
+  `rustls_rustcrypto::` extern name with no source or feature-flag changes required.
+- **OCSP revocation-check hardening**
+  (`oxitls-adapter-rustls-rustcrypto::verifier::ocsp_client`): `check_ocsp_staple` no longer
+  accepts a `Good`/`Unknown` `SingleResponse` unless its `CertID` — `issuerNameHash`,
+  `issuerKeyHash` (recomputed by the new `ocsp_digest`, covering id-sha1 / sha256 / sha384 /
+  sha512 per RFC 6960 §4.1.1), and `serialNumber` — is matched against the certificate
+  actually being verified and its issuer (new `cert_id_matches` / `evaluate_responses`).
+  Previously every `SingleResponse` in a staple was scanned unconditionally, so a response
+  containing no entry for the target certificate — or only entries for an unrelated
+  certificate from the same issuer — still fell through to `OcspCheckResult::Good`. Freshness
+  is now enforced as well: a matching `Good`/`Unknown` outside its `thisUpdate..=nextUpdate`
+  window (new `single_response_is_current`) is rejected as stale, closing a replayed-response
+  bypass; a matching `Revoked` stays authoritative regardless of freshness (fail-safe).
+  Covered by 7 new unit tests, including a dedicated id-sha1 CertID regression pair.
+
+### Added
+- New crate **`oxitls-rustcrypto-provider`**: a complete Pure-Rust
+  `rustls::crypto::CryptoProvider` (`oxitls_rustcrypto_provider::provider()`) carrying the
+  RUSTSEC-2026-0104 fix described above. Supplies TLS 1.3 cipher suites (AES-128-GCM,
+  AES-256-GCM, ChaCha20-Poly1305), optional TLS 1.2 ECDHE-ECDSA / ECDHE-RSA suites (`tls12`
+  feature, on by default), X25519 / secp256r1 / secp384r1 key exchange, ECDSA / Ed25519 / RSA
+  (PKCS#1v1.5 + PSS) signing and verification, and an RFC 9001 §5.4 QUIC header-protection
+  module (`quic::HeaderProtectionKey`). Its RustCrypto dependency versions are intentionally
+  pinned rather than workspace-shared to track the proven upstream fork exactly (e.g. it pins
+  `p256`/`p384` 0.13.x while the rest of the workspace uses 0.14.0-rc.x for `oxitls-rcgen`).
+
+### Changed
+- `oxihttp` dev-dependency: 0.1.4 → 0.2.0.
+- `oxiarc-deflate`: 0.3.3 → 0.3.6.
+- `h2`: 0.4.14 → 0.4.15.
+- `p256` / `p384` (workspace-level, used by `oxitls-rcgen`): 0.14.0-rc.9 → 0.14.0-rc.15.
+- `getrandom`: 0.4.2 → 0.4.3.
+- `aws-lc-rs` (bench/dev-only edge): 1.17.0 → 1.17.1.
+- `oxicrypto-core` / `oxicrypto-adapter-aws-lc` (dev-dependency only — `oxitls-adapter-aws-lc`'s
+  wave8 coexistence test and the `oxitls-bench` AEAD/handshake comparison benches): 0.2.0 →
+  0.2.1. `Cargo.lock` re-resolved to match; no production code path is affected.
+- `aes-gcm`: 0.10.3 → 0.11.0; `chacha20poly1305`: 0.10 → 0.11. Internal call sites in
+  `oxitls::ticketer`, `oxitls-adapter-rustls-rustcrypto::hpke::aead`, and the `oxitls-bench`
+  AEAD/handshake benchmarks were migrated from the deprecated `AeadInPlace` API to the new
+  `AeadInOut` / `encrypt_inout_detached` API; no behavior change.
+- New `sha1` workspace dependency (0.10, `oid` feature) added to
+  `oxitls-adapter-rustls-rustcrypto`, used by the OCSP `CertID` hash recomputation above.
+- All workspace-internal crate versions bumped to 0.2.1 in root `Cargo.toml`.
+
+### Fixed
+- `extract_sct_extension` (`oxitls-adapter-rustls-rustcrypto::verifier::sct`) now strips the
+  nested DER `OCTET STRING` tag/length that RFC 6962 §3.3 wraps around the TLS-encoded
+  `SignedCertificateTimestampList` before handing the bytes to `parse_sct_list` (new
+  `strip_sct_octet_string`, handling both short- and long-form DER lengths). Previously the
+  wrapper's leading `0x04 <len>` bytes were fed straight into the TLS-format parser as if
+  they were its `u16` list-length prefix, so a certificate carrying a real, X.509-embedded
+  SCT list extension always failed to parse — Certificate Transparency verification never saw
+  a valid SCT via this path. Covered by 4 new unit tests.
+
+---
+
 ## [0.2.0] - 2026-06-22
 
 ### Security
@@ -44,10 +112,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `oxitls_webpki_roots::load_native_roots(...)`.
 - Apps needing aws-lc-rs or PKCS#11 crypto: depend on `oxitls-adapter-aws-lc` or
   `oxitls-adapter-pkcs11` directly rather than enabling the (now-removed) facade features.
-
----
-
-## [0.1.4] - Unreleased
 
 ---
 
@@ -259,6 +323,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - PKCS#11 tests require SoftHSM2 and are marked `#[ignore]` by default
 - `oxitls-bench` has `publish = false` (internal benchmarking tool)
 
+[0.2.1]: https://github.com/cool-japan/oxitls/releases/tag/v0.2.1
 [0.1.3]: https://github.com/cool-japan/oxitls/releases/tag/v0.1.3
 [0.1.2]: https://github.com/cool-japan/oxitls/releases/tag/v0.1.2
 [0.1.1]: https://github.com/cool-japan/oxitls/releases/tag/v0.1.1

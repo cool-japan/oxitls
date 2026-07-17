@@ -1,10 +1,10 @@
 # OxiTLS TODO
 
-## Status — v0.2.0 — 2026-06-22
+## Status — v0.2.1 — 2026-07-17
 
-Pure-Rust TLS transport stack at ~26 000 SLOC across 9 subcrates. All M0–M5
-milestones and Waves 6–9 complete, plus ECH/HPKE (RFC 9180) and RFC 8879 cert compression added in v0.1.1.
-**392 tests passing** (aws-lc adapter excluded from count).
+Pure-Rust TLS transport stack at 27,748 SLoC across 11 workspace crates. All M0–M5
+milestones and Waves 6–9 complete, plus ECH/HPKE (RFC 9180) and RFC 8879 cert compression added in v0.1.1, and the RUSTSEC-2026-0104 fix (new `oxitls-rustcrypto-provider` fork crate) plus OCSP/SCT verification hardening added in v0.2.1.
+**358 tests passing** with default features (**443** with `--all-features`).
 
 Release-check performed 2026-06-01 (v0.1.0):
 - cargo check: PASS
@@ -53,6 +53,19 @@ Release-check performed 2026-06-22 (v0.2.0):
 - Removed aws-lc and pkcs11 feature flags from oxitls facade (adapters remain as standalone crates)
 - CHANGELOG.md updated with 0.2.0 entry
 - README.md updated: test count, crate table, version references
+
+Release-check performed 2026-07-17 (v0.2.1):
+- cargo check / cargo clippy --all-features --all-targets -- -D warnings / RUSTDOCFLAGS="-D warnings" cargo doc --all-features --no-deps: all PASS, 0 warnings
+- cargo nextest run (default features): 358 passed, 8 skipped
+- cargo nextest run --all-features: 443 passed, 10 skipped
+- cargo test --all-features --doc: 45 passed (all doc tests pass)
+- Security fix: RUSTSEC-2026-0104 (rustls-webpki CRL-parsing panic) eliminated — new in-workspace crate `oxitls-rustcrypto-provider` forks `rustls-rustcrypto` with the `webpki`/`rustls-webpki` dependency removed entirely; workspace `Cargo.toml` renames the dependency (`package = "oxitls-rustcrypto-provider"`) so `oxitls-adapter-rustls-rustcrypto` keeps compiling against the same `rustls_rustcrypto::` extern name
+- OCSP staple validation hardened: `CertID` (issuer hash + serial) now bound to the certificate actually being verified (`cert_id_matches`/`evaluate_responses`); `thisUpdate`/`nextUpdate` freshness enforced (`single_response_is_current`)
+- SCT parsing fixed: `extract_sct_extension` now strips the RFC 6962 DER `OCTET STRING` wrapper (`strip_sct_octet_string`) before parsing embedded SCT lists
+- pub_oxitls.sh publish script updated for the new `oxitls-rustcrypto-provider` crate
+- Removed 2 unused deps: `hdrhistogram`, `rand` (in `oxitls-rcgen`)
+- CHANGELOG.md updated with 0.2.1 entry
+- README.md / TODO.md updated: test counts, crate table/count, version references
 
 ## Core Implementation
 - [x] 0-RTT early data support in ClientBuilder and ServerBuilder (~200 SLOC)
@@ -150,3 +163,20 @@ Release-check performed 2026-06-22 (v0.2.0):
 - [x] v0.1.1 release-check (2026-06-03): 339 tests, ECH/HPKE KATs, cert-compression, hybrid PKCS11+aws-lc, version bump
 - [x] v0.1.2 release-check (2026-06-10): 424 passed, 10 skipped; wave8 coexist test activated; CHANGELOG/README/TODO finalized; dry-run expected-fail (deps not yet published)
 - [x] v0.2.0 release-check (2026-06-22): 392 tests (aws-lc adapter excluded); oxitls-native-certs quarantine crate shipped; oxitls-webpki-roots purified to Mozilla-only; facade aws-lc/pkcs11 features removed
+- [x] v0.2.1 release-check (2026-07-17): 358 tests default / 443 all-features; RUSTSEC-2026-0104 fixed via new oxitls-rustcrypto-provider fork crate; OCSP CertID-matching + freshness hardening; SCT extraction fix
+
+
+---
+
+<!-- production-readiness-backlog 2026-07-16 -->
+## Production-Readiness Backlog — 2026-07-16
+
+_Consolidated from static audit + Opus adversarial bug-hunt (48 verified defects across noffi) + baseline nextest/clippy + design investigation. See `../NOFFI_PRODUCTION_BACKLOG.md` for the full cross-project list and severity/model legend._
+
+**Update 2026-07-17:** all 4 items below were fixed and shipped in the v0.2.1 release (see `CHANGELOG.md` `## [0.2.1]` and the 2026-07-17 release-check entry above).
+
+**Confirmed bugs — Opus-verified (rustls-rustcrypto verifier adapter):**
+- [x] **S · high** `oxitls-adapter-rustls-rustcrypto/src/verifier/ocsp_client.rs:235` — OCSP staple never matches SingleResponse CertID/serial to the cert → a "Good" response for a DIFFERENT cert from same CA accepted → revocation-check bypass. R2/N0 — **fixed in v0.2.1** via `cert_id_matches`/`evaluate_responses` (binds issuer-hash + serial to the verified cert)
+- [x] **S · high** `.../verifier/sct.rs:651` — `extract_sct_extension` passes raw extnValue to `parse_sct_list` without stripping the nested DER OCTET STRING TL → embedded SCTs always misparsed. R2/N0 — **fixed in v0.2.1** via `strip_sct_octet_string`
+- [x] **S · med** `.../verifier/ocsp_client.rs:249` — OCSP staple never validates thisUpdate/nextUpdate → expired "Good" replayable indefinitely. R2/N0 — **fixed in v0.2.1** via `single_response_is_current`
+- [x] **B/easy · L1** CHANGELOG out-of-order `[0.1.4]` after `[0.2.0]`; host `oxitls-rustcrypto-provider` fork (from oxisql Q1); switch adapter to fork. — **done in v0.2.1**: CHANGELOG.md is in correct descending order; fork hosted at `crates/oxitls-rustcrypto-provider`; workspace `Cargo.toml` renames `rustls-rustcrypto` to the fork (`package = "oxitls-rustcrypto-provider"`)

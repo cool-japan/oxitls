@@ -24,9 +24,6 @@ cargo bench -p oxitls-bench --no-run
 
 # Heap-allocation profiling (writes dhat-heap.json).
 cargo bench -p oxitls-bench --features dhat-heap --bench allocations
-
-# Latency-percentile output via HDR histogram.
-cargo bench -p oxitls-bench --features latency-histogram --bench http_latency
 ```
 
 All targets use [`criterion`] (`harness = false`).
@@ -44,6 +41,7 @@ All targets use [`criterion`] (`harness = false`).
 | `connector_cold_start` | `connector_with_webpki_roots()` cold-start vs cached (`Arc::clone`) cost |
 | `builder_construction` | `ClientBuilder` / `ServerBuilder` `build()` cost (provider + root-store setup) |
 | `connection_pool` | Pool "hit" (`Arc::clone` of a config) vs "cold build" of a fresh `ClientConfig` |
+| `early_data` | `ClientBuilder::with_early_data()` and `ServerBuilder::with_max_early_data_size()` construction overhead vs baseline `build()` |
 
 ### Cryptographic primitives (vs ring / aws-lc-rs)
 
@@ -104,7 +102,6 @@ All targets use [`criterion`] (`harness = false`).
 | Feature | Default | Description |
 |---------|---------|-------------|
 | `dhat-heap` | off | Installs `dhat` as the `#[global_allocator]` for heap profiling (writes `dhat-heap.json`) |
-| `latency-histogram` | off | Emits HDR-histogram latency percentiles alongside the criterion HTML report |
 
 ## Cross-references
 

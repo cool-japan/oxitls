@@ -7,6 +7,7 @@ license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
 description = "OxiTLS adapter: aws-lc-rs backed rustls CryptoProvider"
+readme = "README.md"
 categories = ["cryptography", "network-programming"]
 keywords = ["tls", "rustls", "aws-lc-rs", "cooljapan", "oxitls"]
 

@@ -7,6 +7,7 @@ license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
 description = "Pure-Rust certificate generation for OxiTLS — rcgen bridge backed by OxiCrypto signing keys (Ed25519, ECDSA-P256), zero ring/aws-lc-rs"
+readme = "README.md"
 categories = ["cryptography", "network-programming"]
 keywords = ["tls", "rcgen", "certificates", "pure-rust", "cooljapan"]
 
@@ -16,7 +17,6 @@ ed25519-dalek = { workspace = true }
 p256          = { workspace = true }
 p384          = { workspace = true }
 rsa           = { workspace = true }
-rand          = { workspace = true }
 getrandom     = { workspace = true }
 oxitls-core   = { workspace = true }
 oxitls-adapter-rustls-rustcrypto = { workspace = true }

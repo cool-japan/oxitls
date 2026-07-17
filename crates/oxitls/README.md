@@ -7,15 +7,17 @@
 
 The facade also performs **provider selection** through feature flags. The default closure is 100% Pure Rust and never calls `CryptoProvider::install_default()` — providers are injected per-config. Non-Pure-Rust providers (aws-lc-rs and PKCS#11) are available as standalone adapter crates as of 0.2.0 and are no longer feature flags of this facade.
 
+`oxitls` has no direct API changes in 0.2.1, but transitively picks up two adapter-layer fixes: RUSTSEC-2026-0104 (a `rustls-webpki` CRL-parsing panic) is eliminated from the default Pure-Rust provider chain, and the OCSP-stapling (`with_ocsp_response` / `with_ocsp_response_resolver`) and Certificate Transparency (`with_ct_logs`) verification paths gained CertID-binding, freshness enforcement, and an embedded-SCT parsing fix. See [`oxitls-adapter-rustls-rustcrypto`](https://crates.io/crates/oxitls-adapter-rustls-rustcrypto) and `CHANGELOG.md` `[0.2.1]` for detail.
+
 ## Installation
 
 ```toml
 [dependencies]
 # Default: Pure-Rust TLS + Mozilla webpki roots
-oxitls = "0.2.0"
+oxitls = "0.2.1"
 
 # HTTP/2 over TLS and Pure-Rust cert generation
-oxitls = { version = "0.2.0", features = ["h2", "rcgen"] }
+oxitls = { version = "0.2.1", features = ["h2", "rcgen"] }
 ```
 
 For the aws-lc-rs provider (FIPS/high-throughput) or the PKCS#11 HSM/TPM signer, add the respective adapter crate directly — they are not feature flags of the `oxitls` facade as of 0.2.0.

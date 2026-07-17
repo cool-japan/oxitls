@@ -1,10 +1,13 @@
 # oxitls-adapter-rustls-rustcrypto TODO
 
 ## Status
-Working adapter wrapping rustls 0.23 + rustls-rustcrypto CryptoProvider. Provides
-`pure_provider()`, `client_config()`, `server_config()`, `RustcryptoConnector`,
-and `RustcryptoAcceptor` (~108 SLOC). Per-config provider injection -- never calls
-`install_default()`. Functional for basic TLS 1.3 and TLS 1.2 handshakes.
+Working adapter wrapping rustls 0.23 + rustls-rustcrypto CryptoProvider (as of
+0.2.1, backed by the in-workspace `oxitls-rustcrypto-provider` fork — see
+Cargo.toml). Provides `pure_provider()`, `client_config()`, `server_config()`,
+`RustcryptoConnector`, and `RustcryptoAcceptor` (~108 SLOC). Per-config provider
+injection -- never calls `install_default()`. Functional for basic TLS 1.3 and
+TLS 1.2 handshakes. 60 tests passing (default features) / 97 passing
+(all-features), zero failures/warnings (0.2.1).
 
 ## Core Implementation
 - [x] Add CRL (Certificate Revocation List) checking via `rustls::server::WebPkiClientVerifier` CRL injection (~120 SLOC)
@@ -78,6 +81,13 @@ and `RustcryptoAcceptor` (~108 SLOC). Per-config provider injection -- never cal
   - **Prerequisites:** `oxiarc-deflate` 0.3.2 verified published on crates.io; pure Rust, no build.rs/sys.
   - **Tests:** unit round-trip compress→decompress on a sample cert-chain blob (both levels); length-mismatch input rejected as `DecompressionFailed`; integration TLS 1.3 loopback with both peers using `with_cert_compression()` asserting handshake success.
   - **Risk:** `oxiarc-deflate` fetch from crates.io; mitigated — feature is opt-in so default build is unaffected. Brotli (alg 2) via `oxiarc-brotli` is a follow-up.
+
+## v0.2.1 — OCSP/SCT hardening
+
+- [x] OCSP `CertID` binding + freshness enforcement in `check_ocsp_staple` (`src/verifier/ocsp_client.rs`): new `ocsp_digest` / `cert_id_matches` / `evaluate_responses` / `single_response_is_current` helpers recompute `issuerNameHash`/`issuerKeyHash` (id-sha1/sha256/sha384/sha512 per RFC 6960 §4.1.1) and match `serialNumber` against the certificate actually being verified and its issuer, and reject a matching `Good`/`Unknown` outside its `thisUpdate..=nextUpdate` window. Closes a bypass where a staple containing no matching entry (or only an unrelated entry) previously fell through to `Good`. A matching `Revoked` stays authoritative regardless of freshness (fail-safe). 7 new unit tests.
+- [x] SCT embedded-extension parsing fix in `extract_sct_extension` (`src/verifier/sct.rs`): new `strip_sct_octet_string` strips the RFC 6962 §3.3 DER `OCTET STRING` tag/length wrapper (both short- and long-form DER lengths) before handing the bytes to `parse_sct_list`. Previously the wrapper's leading `0x04 <len>` bytes were fed straight into the TLS-format parser as the `u16` list-length prefix, so a certificate carrying a real, X.509-embedded SCT list extension always failed to parse. 4 new unit tests.
+
+See `CHANGELOG.md` `[0.2.1]` for full detail.
 
 ## Proposed follow-ups
 

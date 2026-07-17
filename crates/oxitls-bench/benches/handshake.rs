@@ -14,8 +14,8 @@ use criterion::{criterion_group, criterion_main, BatchSize, BenchmarkId, Criteri
 // ── OxiTLS / RustCrypto AEAD ─────────────────────────────────────────────────
 
 use aes_gcm::{
-    aead::{AeadInPlace, KeyInit},
-    Aes256Gcm, Key, Nonce,
+    aead::{AeadInOut, KeyInit},
+    Aes256Gcm, Nonce,
 };
 
 // ── ring AEAD ─────────────────────────────────────────────────────────────────
@@ -202,9 +202,8 @@ fn bench_aead_1kb(c: &mut Criterion) {
 
     // ── OxiCrypto / aes-gcm (pure Rust / RustCrypto) ─────────────────────────
     {
-        let key = Key::<Aes256Gcm>::from_slice(&key_bytes);
-        let cipher = Aes256Gcm::new(key);
-        let nonce = Nonce::from_slice(&nonce_bytes);
+        let cipher = Aes256Gcm::new_from_slice(&key_bytes).expect("oxicrypto key");
+        let nonce = Nonce::from(nonce_bytes);
 
         group.bench_with_input(
             BenchmarkId::new("oxicrypto_aes256gcm", BENCH_DATA_LEN),
@@ -215,7 +214,7 @@ fn bench_aead_1kb(c: &mut Criterion) {
                     |mut buf| {
                         // Returns an authentication tag; discard via std::hint::black_box
                         let tag = cipher
-                            .encrypt_in_place_detached(nonce, b"", &mut buf)
+                            .encrypt_inout_detached(&nonce, b"", (&mut buf[..]).into())
                             .expect("oxicrypto encrypt");
                         std::hint::black_box(tag);
                     },

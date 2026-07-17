@@ -14,10 +14,10 @@ Like every OxiTLS adapter, this crate **never** calls `CryptoProvider::install_d
 ```toml
 [dependencies]
 # Reserves the name but pulls in NO C code (default features are empty):
-oxitls-adapter-aws-lc = "0.2.0"
+oxitls-adapter-aws-lc = "0.2.1"
 
 # Opt in to the C-backed aws-lc-rs provider:
-oxitls-adapter-aws-lc = { version = "0.2.0", features = ["aws-lc"] }
+oxitls-adapter-aws-lc = { version = "0.2.1", features = ["aws-lc"] }
 ```
 
 ## Quick Start
@@ -148,7 +148,7 @@ All fallible functions return [`oxitls_core::TlsError`](https://crates.io/crates
 
 ## Cross-references
 
-- [`oxitls`](https://crates.io/crates/oxitls) — the Pure-Rust TLS facade; exposes this provider behind its `aws-lc` feature (`oxitls::aws_lc`).
+- [`oxitls`](https://crates.io/crates/oxitls) — the Pure-Rust TLS facade this provider complements; as of v0.2.0 the facade no longer has an `aws-lc` feature or `oxitls::aws_lc` re-export (removed to keep its default closure Pure Rust), so depend on `oxitls-adapter-aws-lc` directly.
 - [`oxitls-adapter-rustls-rustcrypto`](https://crates.io/crates/oxitls-adapter-rustls-rustcrypto) — the **default Pure-Rust** provider; prefer it unless you specifically need AWS-LC or FIPS.
 - [`oxitls-core`](https://crates.io/crates/oxitls-core) — shared traits and types (`TlsError`, `ConnectionInfo`, …).
 - [`oxitls-adapter-pkcs11`](https://crates.io/crates/oxitls-adapter-pkcs11) — PKCS#11 HSM/TPM signer (opt-in, **not** Pure Rust).

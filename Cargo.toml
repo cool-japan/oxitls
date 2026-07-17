@@ -3,6 +3,7 @@ resolver = "2"
 members = [
     "crates/oxitls-core",
     "crates/oxitls-adapter-rustls-rustcrypto",
+    "crates/oxitls-rustcrypto-provider",
     "crates/oxitls-adapter-aws-lc",
     "crates/oxitls-adapter-pkcs11",
     "crates/oxitls-webpki-roots",
@@ -17,7 +18,7 @@ exclude = [
 ]
 
 [workspace.package]
-version = "0.2.0"
+version = "0.2.1"
 edition = "2021"
 rust-version = "1.89"
 authors = ["COOLJAPAN OU (Team Kitasan)"]
@@ -27,20 +28,24 @@ description = "OxiTLS is the COOLJAPAN-blessed Pure Rust TLS transport stack."
 
 [workspace.dependencies]
 # crates in this workspace
-oxitls-core = { path = "crates/oxitls-core", version = "0.2.0" }
-oxitls-adapter-rustls-rustcrypto = { path = "crates/oxitls-adapter-rustls-rustcrypto", version = "0.2.0" }
-oxitls-adapter-aws-lc = { path = "crates/oxitls-adapter-aws-lc", version = "0.2.0" }
-oxitls-adapter-pkcs11 = { path = "crates/oxitls-adapter-pkcs11", version = "0.2.0" }
-oxitls-webpki-roots = { path = "crates/oxitls-webpki-roots", version = "0.2.0" }
-oxitls-native-certs = { path = "crates/oxitls-native-certs", version = "0.2.0" }
-oxitls = { path = "crates/oxitls", version = "0.2.0" }
-oxitls-h2 = { path = "crates/oxitls-h2", version = "0.2.0" }
-oxitls-rcgen = { path = "crates/oxitls-rcgen", version = "0.2.0" }
+oxitls-core = { path = "crates/oxitls-core", version = "0.2.1" }
+oxitls-adapter-rustls-rustcrypto = { path = "crates/oxitls-adapter-rustls-rustcrypto", version = "0.2.1" }
+oxitls-adapter-aws-lc = { path = "crates/oxitls-adapter-aws-lc", version = "0.2.1" }
+oxitls-adapter-pkcs11 = { path = "crates/oxitls-adapter-pkcs11", version = "0.2.1" }
+oxitls-webpki-roots = { path = "crates/oxitls-webpki-roots", version = "0.2.1" }
+oxitls-native-certs = { path = "crates/oxitls-native-certs", version = "0.2.1" }
+oxitls = { path = "crates/oxitls", version = "0.2.1" }
+oxitls-h2 = { path = "crates/oxitls-h2", version = "0.2.1" }
+oxitls-rcgen = { path = "crates/oxitls-rcgen", version = "0.2.1" }
 # external -- default-features = false on rustls/tokio-rustls avoids the aws_lc_rs default
 rustls = { version = "0.23", default-features = false, features = ["std", "tls12"] }
 rustls-pemfile = { version = "2.2" }
-# rustls-rustcrypto uses std+tls12+zeroize by default; do NOT override default-features
-rustls-rustcrypto = { version = "0.0.2-alpha" }
+# rustls-rustcrypto now resolves to the in-oxitls CVE-fixed fork
+# (oxitls-rustcrypto-provider): rustls-webpki dependency removed
+# (RUSTSEC-2026-0104 CRL-parsing panic), alg ids routed through rustls-pki-types.
+# Package-rename keeps the `rustls_rustcrypto` extern name; no [patch] needed.
+# Uses std+tls12+zeroize by default; do NOT override default-features.
+rustls-rustcrypto = { package = "oxitls-rustcrypto-provider", version = "0.2.1", path = "crates/oxitls-rustcrypto-provider" }
 rustls-pki-types = { version = "1" }
 tokio-rustls = { version = "0.26", default-features = false, features = ["tls12"] }
 webpki-roots = { version = "1" }
@@ -50,11 +55,9 @@ tokio = { version = "1", features = ["full"] }
 rcgen = { version = "0.14", default-features = false, features = ["pem"] }
 # h2: HTTP/2 implementation (pure Rust)
 # `unstable` exposes num_active_streams / num_wired_streams on SendRequest.
-h2 = { version = "0.4.14", features = ["unstable"] }
+h2 = { version = "0.4.15", features = ["unstable"] }
 # bytes: shared buffer type used by h2
 bytes = { version = "1" }
-# hdrhistogram: Pure Rust HDR histogram — bench infra latency percentiles
-hdrhistogram = { version = "7.5.4" }
 # http: HTTP types (shared with h2)
 http = { version = "1" }
 # hyper + hyper-util: HTTP/1.1 client/server (used by integration tests)
@@ -64,8 +67,8 @@ http-body-util = { version = "0.1" }
 # Crypto primitives used by oxitls-rcgen for key generation + PKCS#8 export
 # (must stay separate from the oxicrypto workspace — no cross-workspace path dep here)
 ed25519-dalek = { version = "2.2.0", default-features = false, features = ["rand_core", "pkcs8", "alloc"] }
-p256 = { version = "0.14.0-rc.9", default-features = false, features = ["ecdsa", "ecdh", "alloc", "pkcs8"] }
-p384 = { version = "0.14.0-rc.9", default-features = false, features = ["ecdsa", "alloc", "pkcs8"] }
+p256 = { version = "0.14.0-rc.15", default-features = false, features = ["ecdsa", "ecdh", "alloc", "pkcs8"] }
+p384 = { version = "0.14.0-rc.15", default-features = false, features = ["ecdsa", "alloc", "pkcs8"] }
 # RSA: Pure Rust. `sha2` enables the SHA-256 prefix used by PKCS#1 v1.5; `std` provides
 # the Error trait; `pem` adds PEM encoding. pkcs8 is not a feature (it's a transitive
 # crate); EncodePrivateKey/EncodePublicKey are always exposed at rsa::pkcs8::*.
@@ -78,7 +81,7 @@ rsa = { version = "0.9", default-features = false, features = ["sha2", "std", "p
 # rand_core 0.10 is NOT declared as a direct workspace dep: rand 0.10 pulls it
 # transitively, and no crate uses the 0.10 traits directly anymore.
 rand = { version = "0.10", default-features = false, features = ["std", "std_rng", "thread_rng"] }
-getrandom = { version = "0.4.2", features = ["std"] }
+getrandom = { version = "0.4.3", features = ["std"] }
 # p12: Pure Rust PKCS#12 (PFX) export — uses 3DES/PBE via the `des` crate.
 p12 = { version = "0.6" }
 # Note: sha2 is intentionally NOT workspace-shared because oxitls-rcgen needs both
@@ -86,12 +89,12 @@ p12 = { version = "0.6" }
 # feature (required by rsa 0.9 PKCS#1 v1.5 signing). Cargo allows both majors to
 # coexist; each crate adds the version(s) it needs directly.
 # AES-256-GCM for OxiTicketer (no ring)
-aes-gcm = { version = "0.10.3", default-features = false, features = ["aes", "alloc"] }
+aes-gcm = { version = "0.11.0", default-features = false, features = ["aes", "alloc"] }
 # oxiarc-deflate: pure-Rust RFC 1950 zlib / RFC 1951 DEFLATE — cert compression (RFC 8879)
-oxiarc-deflate = { version = "0.3.3", default-features = false }
+oxiarc-deflate = { version = "0.3.6", default-features = false }
 hkdf = { version = "0.13", default-features = false }
 # ChaCha20-Poly1305 (pure Rust, no ring) — used by bench crate AEAD comparison
-chacha20poly1305 = { version = "0.10", default-features = false, features = ["alloc"] }
+chacha20poly1305 = { version = "0.11", default-features = false, features = ["alloc"] }
 # criterion: benchmark harness (bench-crate only)
 criterion = { version = "0.8", features = ["html_reports", "async_tokio"] }
 # cryptoki: PKCS#11 bindings (optional — only pulled in by oxitls-adapter-pkcs11/pkcs11 feature)
@@ -114,7 +117,7 @@ schannel = { version = "0.1" }
 # futures: async utilities used by oxitls-h2
 futures = { version = "0.3" }
 # aws-lc-rs: C/FFI crypto (feature-gated; never in default closure)
-aws-lc-rs = { version = "1.17.0" }
+aws-lc-rs = { version = "1.17.1" }
 # OCSP + DER parsing (Pure Rust, RustCrypto formats)
 x509-ocsp = { version = "0.2", features = ["std"] }
 x509-cert = { version = "0.2", features = ["std", "pem"] }
@@ -130,8 +133,11 @@ parking_lot = { version = "0.12.5" }
 dhat = { version = "0.3" }
 # ring: C/FFI crypto (bench comparison only — never on normal dep edge; feature-gated)
 ring = { version = "0.17" }
+# SHA-1 is required to recompute OCSP CertID issuer hashes: RFC 6960 responders
+# overwhelmingly use id-sha1 as the CertID hashAlgorithm. Pure Rust (RustCrypto).
+sha1 = { version = "0.10", features = ["oid"] }
 # oxihttp: COOLJAPAN HTTP client/server (bench dev-dep only)
-oxihttp = { version = "0.1.4", default-features = false }
+oxihttp = { version = "0.2.0", default-features = false }
 # oxicrypto cross-workspace published crates (dev-dep in oxitls-adapter-aws-lc wave8 test)
-oxicrypto-adapter-aws-lc = { version = "0.2.0" }
-oxicrypto-core = { version = "0.2.0" }
+oxicrypto-adapter-aws-lc = { version = "0.2.1" }
+oxicrypto-core = { version = "0.2.1" }

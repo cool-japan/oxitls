@@ -7,6 +7,7 @@ license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
 description = "OxiTLS webpki trust anchors — Mozilla CA bundle, pure Rust"
+readme = "README.md"
 categories = ["cryptography", "network-programming"]
 keywords = ["tls", "rustls", "webpki", "pure-rust", "cooljapan"]
 

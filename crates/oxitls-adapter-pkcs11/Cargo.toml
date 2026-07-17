@@ -7,6 +7,7 @@ license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
 description = "OxiTLS adapter: PKCS#11 HSM/TPM backed rustls SigningKey via cryptoki"
+readme = "README.md"
 categories = ["cryptography", "network-programming"]
 keywords = ["tls", "rustls", "pkcs11", "hsm", "cooljapan"]
 

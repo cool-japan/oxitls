@@ -639,16 +639,58 @@ fn count_trusted_verified(
     seen.len().min(usize::from(u8::MAX)) as u8
 }
 
-/// Try to extract the SCT list extension OctetString value from a DER cert.
+/// Strip the nested DER `OCTET STRING` (tag + length) that wraps the
+/// TLS-encoded SCT list inside the extension value.
 ///
-/// Returns `None` if the extension is absent or the cert cannot be parsed.
+/// RFC 6962 §3.3 defines the extension value as an `OCTET STRING` whose content
+/// is itself `SignedCertificateTimestampList ::= OCTET STRING`. `x509-parser`
+/// hands us the *content* of the outer extnValue `OCTET STRING`, which is still
+/// a DER `OCTET STRING` (`0x04 <len> <tls-encoded list>`). The bytes that
+/// [`parse_sct_list`] expects (`u16` list length followed by the SCTs) only
+/// begin after this inner tag+length.
+///
+/// Returns `None` when the bytes are not a well-formed definite-length DER
+/// `OCTET STRING`.
+fn strip_sct_octet_string(bytes: &[u8]) -> Option<&[u8]> {
+    let (&tag, rest) = bytes.split_first()?;
+    if tag != 0x04 {
+        return None;
+    }
+    let (&len_byte, rest) = rest.split_first()?;
+    let (content_len, rest) = if len_byte < 0x80 {
+        (usize::from(len_byte), rest)
+    } else {
+        // Long-form length. 0x80 (indefinite) is invalid in DER; support the
+        // 1- and 2-byte forms that cover any real-world SCT list (< 64 KiB).
+        let num_bytes = usize::from(len_byte & 0x7f);
+        if num_bytes == 0 || num_bytes > 2 || rest.len() < num_bytes {
+            return None;
+        }
+        let mut len = 0usize;
+        for &b in &rest[..num_bytes] {
+            len = (len << 8) | usize::from(b);
+        }
+        (len, &rest[num_bytes..])
+    };
+    if rest.len() < content_len {
+        return None;
+    }
+    Some(&rest[..content_len])
+}
+
+/// Try to extract the raw TLS-encoded SCT list from a DER cert.
+///
+/// Returns `None` if the extension is absent, the cert cannot be parsed, or the
+/// nested `OCTET STRING` wrapper is malformed.
 fn extract_sct_extension(cert_der: &CertificateDer<'_>) -> Option<Vec<u8>> {
     let (_, cert) = X509Certificate::from_der(cert_der.as_ref()).ok()?;
     let ext = cert
         .extensions()
         .iter()
         .find(|e| e.oid.to_id_string() == SCT_LIST_OID)?;
-    Some(ext.value.to_vec())
+    // The extension value wraps the TLS-encoded SCT list in a nested DER
+    // OCTET STRING; strip it before returning the raw list bytes.
+    strip_sct_octet_string(ext.value).map(<[u8]>::to_vec)
 }
 
 impl ServerCertVerifier for SctVerifier {
@@ -776,5 +818,102 @@ impl ServerCertVerifier for SctVerifier {
 
     fn supported_verify_schemes(&self) -> Vec<SignatureScheme> {
         self.inner.supported_verify_schemes()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Build one minimal, structurally-valid SCT entry (47 bytes) wrapped in the
+    /// enclosing TLS `SignedCertificateTimestampList` wire format.
+    fn minimal_sct_list_wire() -> Vec<u8> {
+        let mut entry = Vec::new();
+        entry.push(0x00); // version v1
+        entry.extend_from_slice(&[0xAB; 32]); // log_id
+        entry.extend_from_slice(&0x0102_0304_0506_0708u64.to_be_bytes()); // timestamp
+        entry.extend_from_slice(&0u16.to_be_bytes()); // ext_len = 0
+        entry.push(0x04); // hash_alg (sha256)
+        entry.push(0x03); // sig_alg (ecdsa)
+        entry.extend_from_slice(&0u16.to_be_bytes()); // sig_len = 0
+        assert_eq!(entry.len(), 47);
+
+        let entry_len = u16::try_from(entry.len()).expect("entry fits u16");
+        let body_len = u16::try_from(2 + entry.len()).expect("body fits u16");
+        let mut wire = Vec::new();
+        wire.extend_from_slice(&body_len.to_be_bytes());
+        wire.extend_from_slice(&entry_len.to_be_bytes());
+        wire.extend_from_slice(&entry);
+        wire
+    }
+
+    /// Wrap `content` in a short-form DER `OCTET STRING`.
+    fn der_octet_string(content: &[u8]) -> Vec<u8> {
+        let len = u8::try_from(content.len()).expect("short form");
+        let mut v = vec![0x04, len];
+        v.extend_from_slice(content);
+        v
+    }
+
+    #[test]
+    fn strip_octet_string_unwraps_wrapped_sct_list() {
+        let wire = minimal_sct_list_wire();
+        let wrapped = der_octet_string(&wire);
+
+        let stripped = strip_sct_octet_string(&wrapped).expect("well-formed OCTET STRING");
+        assert_eq!(stripped, wire.as_slice());
+
+        // The stripped bytes parse into exactly one SCT.
+        let scts = parse_sct_list(stripped).expect("stripped list parses");
+        assert_eq!(scts.len(), 1);
+
+        // Regression guard: feeding the *un-stripped* bytes to the parser
+        // misparses (the DER tag/length are read as the list length).
+        assert!(
+            parse_sct_list(&wrapped).is_err(),
+            "un-stripped wrapper must not parse as an SCT list"
+        );
+    }
+
+    #[test]
+    fn strip_octet_string_supports_long_form_length() {
+        let content = vec![0xEE; 200];
+        let mut wrapped = vec![0x04, 0x81, 200]; // long form: 0x81 <len>
+        wrapped.extend_from_slice(&content);
+        let stripped = strip_sct_octet_string(&wrapped).expect("long-form OCTET STRING");
+        assert_eq!(stripped, content.as_slice());
+    }
+
+    #[test]
+    fn strip_octet_string_rejects_malformed() {
+        assert!(strip_sct_octet_string(&[]).is_none(), "empty");
+        assert!(strip_sct_octet_string(&[0x30, 0x00]).is_none(), "wrong tag");
+        assert!(
+            strip_sct_octet_string(&[0x04, 0x05, 0x00]).is_none(),
+            "truncated content"
+        );
+    }
+
+    /// End-to-end: a certificate carrying a correctly nested SCT-list extension
+    /// yields the raw list bytes, which then parse into one SCT.
+    #[test]
+    fn extract_sct_extension_strips_nested_octet_string() {
+        use rcgen::{CertificateParams, CustomExtension, KeyPair};
+
+        let wire = minimal_sct_list_wire();
+        let wrapped = der_octet_string(&wire);
+
+        let mut params = CertificateParams::new(vec!["localhost".to_string()]).expect("params");
+        let sct_oid: &[u64] = &[1, 3, 6, 1, 4, 1, 11129, 2, 4, 2];
+        params
+            .custom_extensions
+            .push(CustomExtension::from_oid_content(sct_oid, wrapped));
+        let kp = KeyPair::generate().expect("keypair");
+        let cert = params.self_signed(&kp).expect("self-signed");
+        let cert_der = CertificateDer::from(cert.der().to_vec());
+
+        let extracted = extract_sct_extension(&cert_der).expect("SCT ext present");
+        assert_eq!(extracted, wire, "extract must return the unwrapped list");
+        assert_eq!(parse_sct_list(&extracted).expect("parses").len(), 1);
     }
 }

@@ -1,10 +1,12 @@
 # oxitls-bench TODO
 
 ## Status
-Benchmark crate (~302 SLOC) with three criterion benchmark groups: TLS 1.3 full
-handshake, TLS 1.3 resumed handshake (OxiTicketer), and AES-256-GCM 1KB encrypt
-comparing OxiCrypto vs ring vs aws-lc-rs. Benchmarks compile and run. ring and
-aws-lc-rs are dev-only dependencies scoped to this crate.
+Benchmark crate (~2,870 SLOC across 29 Rust files) with 27 criterion benchmark
+targets spanning handshake/resumption, cryptographic primitives (AEAD/signatures/
+digest vs ring/aws-lc-rs), data transfer, ALPN/SNI/mTLS/connection metadata,
+certificate generation, OCSP stapling, session-ticket rotation, and allocation
+profiling (see README.md "Benchmark Targets" for the full list). Benchmarks
+compile and run. ring and aws-lc-rs are dev-only dependencies scoped to this crate.
 
 ## Core Implementation
 - [x] Add TLS 1.2 full handshake benchmark (ECDHE-ECDSA-AES128-GCM-SHA256) (~60 SLOC)
@@ -25,7 +27,7 @@ aws-lc-rs are dev-only dependencies scoped to this crate.
 - [x] Add connection pool reuse benchmark: measure amortized cost of keep-alive connections (~100 SLOC)
 
 ## API Improvements
-- [x] Add `--features latency-histogram` for HDR histogram output alongside criterion HTML — Wave 5 Slice F (latency-histogram feature + hdrhistogram optional dep in Cargo.toml)
+- [x] Add `--features latency-histogram` for HDR histogram output alongside criterion HTML — Wave 5 Slice F (latency-histogram feature + hdrhistogram optional dep in Cargo.toml). **Removed 2026-07-17**: dead scaffold — no benchmark ever wired up actual HDR-histogram instrumentation, so the unused `hdrhistogram` dependency and this feature flag were dropped from `Cargo.toml` (and the corresponding README references removed)
 - [x] Add benchmark result comparison script: `scripts/bench-compare.sh` that compares against baseline — Wave 5 Slice F
 - [x] Add JSON output mode for CI integration (`--output-format json`)
 - [x] Extract shared `CertFixture` and `pure_provider()` helpers into a `bench_common` module — Wave 5 Slice F (benches/bench_common/mod.rs)

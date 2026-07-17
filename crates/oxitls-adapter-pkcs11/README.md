@@ -14,10 +14,10 @@ The crypto provider used for the handshake itself is supplied by the caller, so 
 ```toml
 [dependencies]
 # Reserves the name but pulls in NO HSM/FFI code (default features are empty):
-oxitls-adapter-pkcs11 = "0.2.0"
+oxitls-adapter-pkcs11 = "0.2.1"
 
 # Opt in to the PKCS#11 signing adapter:
-oxitls-adapter-pkcs11 = { version = "0.2.0", features = ["pkcs11"] }
+oxitls-adapter-pkcs11 = { version = "0.2.1", features = ["pkcs11"] }
 ```
 
 ## Quick Start
@@ -159,7 +159,7 @@ The legacy `PkcsSignError` enum (`InitError`, `SessionError`, `KeyNotFound`, `Si
 
 ## Cross-references
 
-- [`oxitls`](https://crates.io/crates/oxitls) — the Pure-Rust TLS facade; exposes this adapter behind its `pkcs11` feature.
+- [`oxitls`](https://crates.io/crates/oxitls) — the Pure-Rust TLS facade this adapter complements; as of v0.2.0 the facade no longer has a `pkcs11` feature (removed to keep its default closure Pure Rust), so depend on `oxitls-adapter-pkcs11` directly.
 - [`oxitls-adapter-rustls-rustcrypto`](https://crates.io/crates/oxitls-adapter-rustls-rustcrypto) — the **default Pure-Rust** crypto provider; pass its `pure_provider()` to `Pkcs11TlsProvider::server_config` so only the signature is offloaded to the HSM.
 - [`oxitls-core`](https://crates.io/crates/oxitls-core) — shared traits and types (`TlsError`, …).
 - [`oxitls-adapter-aws-lc`](https://crates.io/crates/oxitls-adapter-aws-lc) — aws-lc-rs provider (opt-in, **not** Pure Rust).

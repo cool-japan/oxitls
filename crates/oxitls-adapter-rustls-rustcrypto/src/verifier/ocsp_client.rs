@@ -28,9 +28,50 @@ use rustls::{
     CertificateError, DigitallySignedStruct, Error as RustlsError, SignatureScheme,
 };
 use x509_cert::der::{Decode, Encode};
-use x509_ocsp::{BasicOcspResponse, CertStatus, OcspResponse, OcspResponseStatus, ResponderId};
+use x509_ocsp::{
+    BasicOcspResponse, CertId, CertStatus, OcspResponse, OcspResponseStatus, ResponderId,
+    SingleResponse,
+};
 
 use super::ocsp_crypto::{verify_eku_ocsp_signing, verify_ocsp_signature, OcspVerifyError};
+
+// ── CertID hash-algorithm OIDs (RFC 6960 §4.1.1 hashAlgorithm) ─────────────────
+
+/// id-sha1 (OIW) — by far the most common OCSP CertID hash.
+const OID_SHA1: &str = "1.3.14.3.2.26";
+/// id-sha256 (NIST).
+const OID_SHA256: &str = "2.16.840.1.101.3.4.2.1";
+/// id-sha384 (NIST).
+const OID_SHA384: &str = "2.16.840.1.101.3.4.2.2";
+/// id-sha512 (NIST).
+const OID_SHA512: &str = "2.16.840.1.101.3.4.2.3";
+
+/// Compute the digest of `data` under the hash algorithm named by `hash_oid`.
+///
+/// Returns `None` for an unrecognised algorithm OID so that CertID matching can
+/// fail closed: a response we cannot bind to the target certificate must not be
+/// trusted.
+fn ocsp_digest(hash_oid: &str, data: &[u8]) -> Option<Vec<u8>> {
+    match hash_oid {
+        OID_SHA1 => {
+            use sha1::Digest as _;
+            Some(sha1::Sha1::digest(data).to_vec())
+        }
+        OID_SHA256 => {
+            use sha2::Digest as _;
+            Some(sha2::Sha256::digest(data).to_vec())
+        }
+        OID_SHA384 => {
+            use sha2::Digest as _;
+            Some(sha2::Sha384::digest(data).to_vec())
+        }
+        OID_SHA512 => {
+            use sha2::Digest as _;
+            Some(sha2::Sha512::digest(data).to_vec())
+        }
+        _ => None,
+    }
+}
 
 /// Policy controlling how a missing or unparseable OCSP staple is treated.
 ///
@@ -154,10 +195,18 @@ fn cert_to_der(cert: &x509_cert::Certificate) -> Result<Vec<u8>, OcspVerifyError
 
 /// Parse an OCSP staple and verify the cryptographic signature.
 ///
-/// The `issuer_cert_der` is the DER of the certificate that issued the
-/// end-entity certificate; it is used for signer identification and as a
-/// fallback signing key.
-fn check_ocsp_staple(ocsp_response: &[u8], issuer_cert_der: Option<&[u8]>) -> OcspCheckResult {
+/// The `end_entity_der` is the certificate being verified; its serial number is
+/// matched against the CertID of each SingleResponse. The `issuer_cert_der` is
+/// the DER of the certificate that issued the end-entity certificate; it is used
+/// for signer identification, as a fallback signing key, and to recompute the
+/// CertID issuer name/key hashes. `now` is the current time used to reject
+/// stale (replayed) responses.
+fn check_ocsp_staple(
+    ocsp_response: &[u8],
+    end_entity_der: &[u8],
+    issuer_cert_der: Option<&[u8]>,
+    now: UnixTime,
+) -> OcspCheckResult {
     if ocsp_response.is_empty() {
         return OcspCheckResult::Absent;
     }
@@ -230,23 +279,155 @@ fn check_ocsp_staple(ocsp_response: &[u8], issuer_cert_der: Option<&[u8]>) -> Oc
         "OCSP BasicOcspResponse parsed and signature verified"
     );
 
-    // Scan all single responses; any `Revoked` entry triggers rejection.
-    let mut has_unknown = false;
-    for sr in &basic.tbs_response_data.responses {
-        match sr.cert_status {
-            CertStatus::Revoked(_) => return OcspCheckResult::Revoked,
-            CertStatus::Unknown(_) => {
-                has_unknown = true;
-            }
-            CertStatus::Good(_) => {}
+    // Bind the response to the certificate being verified and enforce freshness
+    // before trusting any status.
+    let issuer_cert = issuer_cert_der.and_then(|der| x509_cert::Certificate::from_der(der).ok());
+    evaluate_responses(
+        &basic.tbs_response_data.responses,
+        end_entity_der,
+        issuer_cert.as_ref(),
+        now,
+    )
+}
+
+/// Match a SingleResponse's CertID against the certificate being verified.
+///
+/// Returns `true` only when the CertID's `issuerNameHash`, `issuerKeyHash`
+/// (recomputed with the CertID's own `hashAlgorithm`) and `serialNumber` all
+/// correspond to the target end-entity certificate and its issuer. An
+/// unsupported hash algorithm yields `false` (fail closed): a `Good` response
+/// for a *different* certificate from the same CA must never be accepted.
+fn cert_id_matches(
+    cert_id: &CertId,
+    issuer: &x509_cert::Certificate,
+    end_entity_serial: &[u8],
+) -> bool {
+    // serialNumber must match the certificate under verification.
+    if cert_id.serial_number.as_bytes() != end_entity_serial {
+        return false;
+    }
+
+    let hash_oid = cert_id.hash_algorithm.oid.to_string();
+
+    let issuer_name_der = match issuer.tbs_certificate.subject.to_der() {
+        Ok(der) => der,
+        Err(_) => return false,
+    };
+    let issuer_key_bytes = issuer
+        .tbs_certificate
+        .subject_public_key_info
+        .subject_public_key
+        .raw_bytes();
+
+    let expected_name_hash = match ocsp_digest(&hash_oid, &issuer_name_der) {
+        Some(h) => h,
+        None => return false,
+    };
+    let expected_key_hash = match ocsp_digest(&hash_oid, issuer_key_bytes) {
+        Some(h) => h,
+        None => return false,
+    };
+
+    cert_id.issuer_name_hash.as_bytes() == expected_name_hash.as_slice()
+        && cert_id.issuer_key_hash.as_bytes() == expected_key_hash.as_slice()
+}
+
+/// Return `true` when `now` falls inside the response's validity window
+/// (`thisUpdate <= now <= nextUpdate`).
+///
+/// A response whose `thisUpdate` is in the future, or whose `nextUpdate` has
+/// already passed, is stale and must not be trusted as a fresh `Good` — this is
+/// what prevents an old "Good" from being replayed forever (RFC 6960 §3.2).
+fn single_response_is_current(sr: &SingleResponse, now: UnixTime) -> bool {
+    let now_secs = now.as_secs();
+
+    let this_update = sr.this_update.0.to_unix_duration().as_secs();
+    if now_secs < this_update {
+        return false;
+    }
+
+    if let Some(next) = &sr.next_update {
+        let next_update = next.0.to_unix_duration().as_secs();
+        if now_secs > next_update {
+            return false;
         }
     }
 
+    true
+}
+
+/// Evaluate the SingleResponses that actually cover the certificate being
+/// verified.
+///
+/// Only responses whose CertID binds to the target cert/issuer are considered.
+/// A `Revoked` match is authoritative regardless of freshness (fail-safe). A
+/// `Good`/`Unknown` match is only honoured inside its validity window. If no
+/// response covers the certificate, the staple is treated as unusable.
+fn evaluate_responses(
+    responses: &[SingleResponse],
+    end_entity_der: &[u8],
+    issuer: Option<&x509_cert::Certificate>,
+    now: UnixTime,
+) -> OcspCheckResult {
+    let end_entity = match x509_cert::Certificate::from_der(end_entity_der) {
+        Ok(c) => c,
+        Err(e) => {
+            tracing::warn!(error = %e, "failed to parse end-entity cert for OCSP CertID match");
+            return OcspCheckResult::Unparseable;
+        }
+    };
+    let ee_serial = end_entity.tbs_certificate.serial_number.as_bytes().to_vec();
+
+    let issuer = match issuer {
+        Some(i) => i,
+        None => {
+            // Without the issuer cert we cannot bind any response to the target.
+            tracing::warn!("no issuer cert available; cannot match OCSP CertID");
+            return OcspCheckResult::Unparseable;
+        }
+    };
+
+    let mut matched_any = false;
+    let mut has_unknown = false;
+    let mut good_current = false;
+
+    for sr in responses {
+        if !cert_id_matches(&sr.cert_id, issuer, &ee_serial) {
+            continue;
+        }
+        matched_any = true;
+
+        // Revoked is authoritative even if the response is stale (fail-safe).
+        if let CertStatus::Revoked(_) = sr.cert_status {
+            return OcspCheckResult::Revoked;
+        }
+
+        // Good / Unknown are only trusted inside the validity window.
+        if !single_response_is_current(sr, now) {
+            tracing::warn!("OCSP SingleResponse outside its validity window; ignoring");
+            continue;
+        }
+
+        match sr.cert_status {
+            CertStatus::Unknown(_) => has_unknown = true,
+            CertStatus::Good(_) => good_current = true,
+            CertStatus::Revoked(_) => {}
+        }
+    }
+
+    if !matched_any {
+        tracing::warn!("no OCSP SingleResponse matches the certificate being verified");
+        return OcspCheckResult::Unparseable;
+    }
+    if good_current {
+        return OcspCheckResult::Good;
+    }
     if has_unknown {
         return OcspCheckResult::Unknown;
     }
 
-    OcspCheckResult::Good
+    // Matched, but the only usable status was stale (e.g. an expired Good).
+    OcspCheckResult::Unparseable
 }
 
 /// Resolve the SPKI DER bytes for the OCSP response signer.
@@ -362,7 +543,7 @@ impl ServerCertVerifier for OcspClientVerifier {
             .map(|c| c.as_ref())
             .or_else(|| Some(end_entity.as_ref()));
 
-        match check_ocsp_staple(ocsp_response, issuer_der) {
+        match check_ocsp_staple(ocsp_response, end_entity.as_ref(), issuer_der, now) {
             OcspCheckResult::Revoked => {
                 return Err(RustlsError::InvalidCertificate(CertificateError::Revoked));
             }
@@ -445,5 +626,176 @@ impl ServerCertVerifier for OcspClientVerifier {
 
     fn supported_verify_schemes(&self) -> Vec<SignatureScheme> {
         self.inner.supported_verify_schemes()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rsa::sha2::Sha256;
+    use x509_cert::der::DateTime;
+    use x509_cert::serial_number::SerialNumber;
+    use x509_ocsp::{CertStatus, OcspGeneralizedTime, SingleResponse};
+
+    /// A fixed "now" of 2025-05-27, used as the verification instant.
+    fn now_2025_05() -> UnixTime {
+        UnixTime::since_unix_epoch(std::time::Duration::from_secs(1_748_304_000))
+    }
+
+    fn gtime(y: u16, m: u8, d: u8) -> OcspGeneralizedTime {
+        OcspGeneralizedTime::from(DateTime::new(y, m, d, 0, 0, 0).expect("valid datetime"))
+    }
+
+    /// Generate a self-signed P-256 certificate and return (DER, parsed cert).
+    /// For a self-signed cert the issuer and end-entity are identical, so the
+    /// CertID issuer hashes and serial all bind to the same certificate.
+    fn self_signed() -> (Vec<u8>, x509_cert::Certificate) {
+        let ck = oxitls_rcgen::generate_self_signed_p256(&["localhost"]).expect("cert gen");
+        let der = ck.cert_der.clone();
+        let cert = x509_cert::Certificate::from_der(&der).expect("parse cert");
+        (der, cert)
+    }
+
+    fn good_single(
+        issuer: &x509_cert::Certificate,
+        serial: SerialNumber,
+        this: OcspGeneralizedTime,
+        next: Option<OcspGeneralizedTime>,
+    ) -> SingleResponse {
+        let cert_id = x509_ocsp::CertId::from_issuer::<Sha256>(issuer, serial).expect("cert id");
+        let mut sr = SingleResponse::new(cert_id, CertStatus::good(), this);
+        sr.next_update = next;
+        sr
+    }
+
+    /// Same as [`good_single`] but builds the `CertID` with `hashAlgorithm =
+    /// id-sha1`, the overwhelmingly common choice among real OCSP responders
+    /// (RFC 6960 §4.1.1). Exercises the `OID_SHA1` arm of `ocsp_digest`.
+    fn good_single_sha1(
+        issuer: &x509_cert::Certificate,
+        serial: SerialNumber,
+        this: OcspGeneralizedTime,
+        next: Option<OcspGeneralizedTime>,
+    ) -> SingleResponse {
+        let cert_id =
+            x509_ocsp::CertId::from_issuer::<sha1::Sha1>(issuer, serial).expect("cert id");
+        let mut sr = SingleResponse::new(cert_id, CertStatus::good(), this);
+        sr.next_update = next;
+        sr
+    }
+
+    /// A "Good" response whose CertID matches the certificate and is within its
+    /// validity window is accepted.
+    #[test]
+    fn good_response_matching_certid_accepted() {
+        let (ee_der, issuer) = self_signed();
+        let serial = issuer.tbs_certificate.serial_number.clone();
+        let sr = good_single(&issuer, serial, gtime(2025, 1, 1), Some(gtime(2026, 1, 1)));
+        let result = evaluate_responses(&[sr], &ee_der, Some(&issuer), now_2025_05());
+        assert!(matches!(result, OcspCheckResult::Good), "got {result:?}");
+    }
+
+    /// A "Good" response for a DIFFERENT serial from the same CA must not be
+    /// accepted for the certificate under verification (revocation bypass).
+    #[test]
+    fn good_response_wrong_serial_rejected() {
+        let (ee_der, issuer) = self_signed();
+        // Derive a serial guaranteed to differ from the real one by flipping a
+        // low bit of its big-endian encoding.
+        let mut wrong_bytes = issuer.tbs_certificate.serial_number.as_bytes().to_vec();
+        if let Some(last) = wrong_bytes.last_mut() {
+            *last ^= 0x01;
+        }
+        let wrong_serial = SerialNumber::new(&wrong_bytes).expect("serial");
+        let sr = good_single(
+            &issuer,
+            wrong_serial,
+            gtime(2025, 1, 1),
+            Some(gtime(2026, 1, 1)),
+        );
+        let result = evaluate_responses(&[sr], &ee_der, Some(&issuer), now_2025_05());
+        assert!(
+            matches!(result, OcspCheckResult::Unparseable),
+            "mismatched CertID serial must not yield Good; got {result:?}"
+        );
+    }
+
+    /// A "Good" response whose CertID uses `hashAlgorithm = id-sha1` — by far the
+    /// most common OCSP responder choice (RFC 6960 §4.1.1) — and matches the
+    /// certificate is accepted. Regression coverage for the `OID_SHA1` arm of
+    /// `ocsp_digest`/`cert_id_matches`, which previously only had a SHA-256 test.
+    #[test]
+    fn good_response_sha1_certid_accepted() {
+        let (ee_der, issuer) = self_signed();
+        let serial = issuer.tbs_certificate.serial_number.clone();
+        let sr = good_single_sha1(&issuer, serial, gtime(2025, 1, 1), Some(gtime(2026, 1, 1)));
+        let result = evaluate_responses(&[sr], &ee_der, Some(&issuer), now_2025_05());
+        assert!(matches!(result, OcspCheckResult::Good), "got {result:?}");
+    }
+
+    /// A "Good" `id-sha1` CertID response for a DIFFERENT serial from the same CA
+    /// must not be accepted for the certificate under verification — the SHA-1
+    /// counterpart of `good_response_wrong_serial_rejected`, guarding against a
+    /// revocation-check bypass on the id-sha1 path specifically.
+    #[test]
+    fn good_response_sha1_certid_wrong_serial_rejected() {
+        let (ee_der, issuer) = self_signed();
+        let mut wrong_bytes = issuer.tbs_certificate.serial_number.as_bytes().to_vec();
+        if let Some(last) = wrong_bytes.last_mut() {
+            *last ^= 0x01;
+        }
+        let wrong_serial = SerialNumber::new(&wrong_bytes).expect("serial");
+        let sr = good_single_sha1(
+            &issuer,
+            wrong_serial,
+            gtime(2025, 1, 1),
+            Some(gtime(2026, 1, 1)),
+        );
+        let result = evaluate_responses(&[sr], &ee_der, Some(&issuer), now_2025_05());
+        assert!(
+            matches!(result, OcspCheckResult::Unparseable),
+            "mismatched SHA-1 CertID serial must not yield Good; got {result:?}"
+        );
+    }
+
+    /// An otherwise-valid "Good" whose `nextUpdate` has already passed must not
+    /// be trusted (prevents replaying an old Good forever).
+    #[test]
+    fn expired_good_response_rejected() {
+        let (ee_der, issuer) = self_signed();
+        let serial = issuer.tbs_certificate.serial_number.clone();
+        let sr = good_single(&issuer, serial, gtime(2024, 1, 1), Some(gtime(2025, 3, 1)));
+        let result = evaluate_responses(&[sr], &ee_der, Some(&issuer), now_2025_05());
+        assert!(
+            !matches!(result, OcspCheckResult::Good),
+            "expired Good must not be accepted; got {result:?}"
+        );
+    }
+
+    /// A "Good" whose `thisUpdate` is in the future must not be trusted yet.
+    #[test]
+    fn future_dated_response_rejected() {
+        let (ee_der, issuer) = self_signed();
+        let serial = issuer.tbs_certificate.serial_number.clone();
+        let sr = good_single(&issuer, serial, gtime(2026, 1, 1), Some(gtime(2027, 1, 1)));
+        let result = evaluate_responses(&[sr], &ee_der, Some(&issuer), now_2025_05());
+        assert!(
+            !matches!(result, OcspCheckResult::Good),
+            "not-yet-valid Good must not be accepted; got {result:?}"
+        );
+    }
+
+    /// Without an issuer certificate no CertID can be matched, so the staple is
+    /// treated as unusable rather than blindly trusted.
+    #[test]
+    fn missing_issuer_cannot_match() {
+        let (ee_der, issuer) = self_signed();
+        let serial = issuer.tbs_certificate.serial_number.clone();
+        let sr = good_single(&issuer, serial, gtime(2025, 1, 1), Some(gtime(2026, 1, 1)));
+        let result = evaluate_responses(&[sr], &ee_der, None, now_2025_05());
+        assert!(
+            matches!(result, OcspCheckResult::Unparseable),
+            "got {result:?}"
+        );
     }
 }
