@@ -149,7 +149,7 @@ ring = { version = "0.17" }
 # overwhelmingly use id-sha1 as the CertID hashAlgorithm. Pure Rust (RustCrypto).
 sha1 = { version = "0.10", features = ["oid"] }
 # oxihttp: COOLJAPAN HTTP client/server (bench dev-dep only)
-oxihttp = { version = "0.2.0", default-features = false }
+oxihttp = { version = "0.2.1", default-features = false }
 # oxicrypto cross-workspace published crates (dev-dep in oxitls-adapter-aws-lc wave8 test)
 oxicrypto-adapter-aws-lc = { version = "0.3.0" }
 oxicrypto-core = { version = "0.3.0" }
