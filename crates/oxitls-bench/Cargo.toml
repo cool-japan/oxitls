@@ -151,7 +151,7 @@ rsa                              = { workspace = true }
 # (rsa 0.9 needs the 0.6 CryptoRngCore bound; workspace rand is 0.10).
 oxitls-core                      = { path = "../oxitls-core" }
 getrandom                        = { workspace = true }
-sha2                             = { version = "0.11", default-features = false, features = ["oid"] }
+sha2                             = { workspace = true }
 # Comparison crates (bench-only, do NOT appear on the oxitls library normal edge)
 ring         = { workspace = true }
 aws-lc-rs    = { workspace = true }

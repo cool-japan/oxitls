@@ -14,12 +14,11 @@ keywords = ["tls", "rustls", "pure-rust", "cooljapan", "oxitls"]
 [dependencies]
 tokio = { workspace = true }
 rustls = { workspace = true }
-# rand_core 0.6 (declared directly, NOT `workspace = true`): the getrandom-
-# backed `OsRng` adapter in `src/os_rng.rs` must implement the *0.6* traits
-# that `rsa`/`ed25519-dalek`/`x25519-dalek` require, while the workspace
-# `rand`/`rand_core` are 0.10. This is the same documented kind of exception
-# as `sha2` needing two majors.
-rand_core = { version = "0.6", default-features = false }
+# rand_core 0.6: the getrandom-backed `OsRng` adapter in `src/os_rng.rs` must
+# implement the *0.6* traits that `rsa`/`ed25519-dalek`/`x25519-dalek`
+# require, while the workspace `rand`/`rand_core` are 0.10 (see the
+# workspace Cargo.toml comment next to this same entry).
+rand_core = { workspace = true }
 getrandom = { workspace = true }
 
 [features]

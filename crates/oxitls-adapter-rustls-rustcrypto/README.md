@@ -11,10 +11,10 @@ This crate provides everything needed to stand up a TLS client or server on the 
 
 ```toml
 [dependencies]
-oxitls-adapter-rustls-rustcrypto = "0.2.1"
+oxitls-adapter-rustls-rustcrypto = "0.3.0"
 
 # With the post-quantum hybrid KX namespace (X25519MLKEM768):
-oxitls-adapter-rustls-rustcrypto = { version = "0.2.1", features = ["post-quantum"] }
+oxitls-adapter-rustls-rustcrypto = { version = "0.3.0", features = ["post-quantum"] }
 ```
 
 Most users should depend on the [`oxitls`](https://crates.io/crates/oxitls) facade instead, which re-exports this crate behind its default `pure` feature.

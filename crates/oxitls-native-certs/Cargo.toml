@@ -17,5 +17,14 @@ rustls = { workspace = true }
 rustls-pki-types = { workspace = true }
 rustls-pemfile = { workspace = true }
 tokio = { workspace = true }
+
+# Platform-FFI deps are target-cfg-gated so a Linux (or any non-macOS,
+# non-Windows) consumer never compiles the macOS/Windows shims it cannot use.
+# This crate remains the impure-by-design "quarantine crate" per its own doc
+# comment (src/lib.rs) -- callers opt into FFI by depending on it directly --
+# but within that opt-in, each platform now only builds its own FFI surface.
+[target.'cfg(target_os = "macos")'.dependencies]
 security-framework = { workspace = true }
+
+[target.'cfg(target_os = "windows")'.dependencies]
 schannel = { workspace = true }

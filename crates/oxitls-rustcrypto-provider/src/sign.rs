@@ -96,7 +96,11 @@ pub fn any_ecdsa_type(der: &PrivateKeyDer<'_>) -> Result<Arc<dyn SigningKey>, ru
 ///
 /// Returns an error if the key couldn't be decoded.
 pub fn any_eddsa_type(der: &PrivateKeyDer<'_>) -> Result<Arc<dyn SigningKey>, rustls::Error> {
-    // TODO: Add support for Ed448
+    // TODO(upstream-inherited): Add support for Ed448 — carried over from
+    // upstream rustls-rustcrypto 0.0.2-alpha, kept as-is to keep this fork's
+    // diff minimal. Harmless in practice: Ed448 is not a TLS 1.3
+    // SignatureScheme (RFC 8446 §4.2.3 lists Ed25519 but not Ed448), so no
+    // handshake path in this workspace can reach it.
     Ed25519SigningKey::try_from(der).map(|x| Arc::new(x) as _)
 }
 

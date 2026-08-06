@@ -12,8 +12,10 @@ categories = ["cryptography", "network-programming"]
 keywords = ["tls", "rustls", "rustcrypto", "pure-rust", "cooljapan"]
 
 [features]
-# Namespace reservation for post-quantum key exchange (X25519MLKEM768).
-# Full wiring is deferred to Wave 6 pending rustls KX-group API stabilisation.
+# Post-quantum hybrid key exchange (X25519MLKEM768, draft-ietf-tls-ecdhe-mlkem)
+# — fully wired (Wave 6 complete): see src/kx.rs for the real
+# encapsulate/decapsulate implementation (ml-kem + x25519-dalek), exported
+# from lib.rs and prepended to the provider's supported KX groups.
 post-quantum = ["dep:ml-kem", "dep:x25519-dalek"]
 # RFC 9180 HPKE base-mode provider for Encrypted Client Hello (ECH).
 ech = ["dep:hkdf", "dep:x25519-dalek", "dep:aes-gcm", "dep:chacha20poly1305", "p256/ecdh"]
@@ -33,7 +35,7 @@ p256 = { workspace = true }
 p384 = { workspace = true }
 ed25519-dalek = { workspace = true, features = ["alloc"] }
 rsa = { workspace = true }
-sha2 = { version = "0.11", default-features = false, features = ["oid"] }
+sha2 = { workspace = true }
 # SHA-1 is required to recompute OCSP CertID issuer hashes: RFC 6960 responders
 # overwhelmingly use id-sha1 as the CertID hashAlgorithm. Pure Rust (RustCrypto).
 sha1 = { workspace = true }
@@ -59,7 +61,7 @@ oxiarc-deflate = { workspace = true, optional = true }
 rcgen = { workspace = true, features = ["crypto", "pem", "ring"] }
 tokio = { workspace = true, features = ["full", "macros"] }
 oxitls-webpki-roots = { path = "../oxitls-webpki-roots" }
-sha2 = { version = "0.11", default-features = false, features = ["oid"] }
+sha2 = { workspace = true }
 oxitls-rcgen = { path = "../oxitls-rcgen" }
 criterion = { workspace = true }
 p256 = { workspace = true }

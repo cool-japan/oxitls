@@ -1,0 +1,18 @@
+# Global Clippy configuration for OxiTLS.
+#
+# msrv matches `rust-version` in the workspace Cargo.toml (Cargo.toml:23) so
+# clippy's MSRV-aware lints (e.g. `manual_c_str_literals`,
+# `manual_div_ceil`) don't suggest APIs unavailable on the floor toolchain.
+msrv = "1.89"
+
+too-many-arguments-threshold = 30
+
+disallowed-methods = []
+disallowed-types = []
+
+# Tests routinely assert against known-good fixtures (cert/key generation,
+# parsed ASN.1 structures) where a failure is a test bug, not a runtime
+# concern -- allow unwrap/expect there. Production code stays on the
+# no-unwrap/no-expect policy (enforced by review, not by this lint config).
+allow-unwrap-in-tests = true
+allow-expect-in-tests = true

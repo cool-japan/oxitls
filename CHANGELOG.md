@@ -5,15 +5,102 @@ All notable changes to OxiTLS will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-08-06
+
+### Fixed
+- **OCSP staple false-rejection on leaf-only chains**: `OcspClientVerifier` no longer
+  synthesises the end-entity certificate as its own issuer when the peer sends no
+  intermediates. Previously, a CA-signed leaf presented with an empty intermediates list
+  resolved the OCSP signer key to the leaf's own SPKI, turning a legitimate stapled
+  response into an unconditional `BadSignature` handshake failure that even `SoftFail`
+  could not escape. The end-entity is now only treated as its own issuer when it is
+  structurally self-signed (`subject == issuer`); otherwise a missing issuer is reported
+  as an unverifiable (`Unparseable`) staple, which policy correctly governs. See
+  `end_entity_is_self_signed` in `oxitls-adapter-rustls-rustcrypto/src/verifier/ocsp_client.rs`.
+- `labeled_expand` (RFC 9180 HPKE LabeledExpand, `oxitls-adapter-rustls-rustcrypto/src/hpke/kdf.rs`)
+  no longer panics on a too-short PRK or an oversized output length — it now returns
+  `Result` (delegating to the existing checked implementation) and every internal caller
+  (`key_schedule_base`, `kem::extract_and_expand`, and all four `DhKem::encap`/`decap`
+  implementations) propagates the error instead of aborting the process.
+
+### Changed
+- Cross-workspace `Cargo.lock` scope notes for `RUSTSEC-2026-0104`/-0099/-0098/-0049 (all
+  four resolve to the same `rustls-webpki` 0.102.8 edge, reached only via the bench-only
+  `oxihttp = "0.2.0"` dev-dependency pulling the published `oxitls` 0.2.0) and for
+  `RUSTSEC-2023-0071` (Marvin/rsa timing side-channel, unreachable here — `rsa` is used
+  only for signing/verification, never PKCS#1v1.5 decryption) are now documented and
+  scoped in `deny.toml` `[advisories] ignore`, each with a written justification, so
+  `cargo deny check advisories` passes.
+- `deny.toml` `[bans] deny` entries for `ring` / `aws-lc-rs` / `aws-lc-sys` /
+  `security-framework` now carry `wrappers` scoping their one intentional dev-only,
+  bench-only, or quarantine-crate edge (`rcgen`, `oxitls-bench`, `oxicrypto-adapter-aws-lc`,
+  `oxitls-adapter-aws-lc`, `oxitls-native-certs`) — any *new* normal-edge dependency on
+  these crates still fails the gate, but the existing intentional edges no longer do, so
+  `cargo deny check bans` passes.
+- `oxitls-native-certs`'s `security-framework` and `schannel` dependencies are now gated
+  under `[target.'cfg(target_os = "...")'.dependencies]` instead of being unconditional —
+  a Linux (or any non-macOS/non-Windows) consumer of this opt-in quarantine crate no
+  longer compiles both platforms' FFI shims for nothing.
+- `sha2` (the 0.11 line) is now a single `workspace.dependencies` entry consumed via
+  `sha2 = { workspace = true }` by all six call sites that previously pinned
+  `sha2 = { version = "0.11", ... }` individually with slightly different feature sets
+  (`oxitls`, `oxitls-adapter-rustls-rustcrypto` ×2, `oxitls-rcgen`, `oxitls-webpki-roots`,
+  `oxitls-bench`). The deliberately-separate `sha2 = "0.10.7"` pin in the vendored
+  `oxitls-rustcrypto-provider` fork is unchanged. `rand_core` (the 0.6 line, the
+  getrandom-backed `OsRng` adapter's trait requirement) is likewise now a single
+  `workspace.dependencies` entry consumed by `oxitls-core` via `rand_core = { workspace = true }`;
+  the deliberately-separate, differently-featured `rand_core = "0.6.4"` pin in
+  `oxitls-rustcrypto-provider` is unchanged.
+- `post-quantum` feature doc comments (`crates/oxitls/Cargo.toml`,
+  `crates/oxitls-adapter-rustls-rustcrypto/Cargo.toml`) corrected from "namespace
+  reservation, full wiring deferred to Wave 6" to reflect that Wave 6 is complete and
+  X25519MLKEM768 is fully wired (real encapsulate/decapsulate in `src/kx.rs`, selected by
+  both `tls13::client::ClientBuilder` and `tls13::server::ServerBuilder`).
+- `crates/oxitls-adapter-rustls-rustcrypto/TODO.md`: removed stale `[compile-blocked]`
+  annotations on the three RFC 7250 raw-public-key integration tests
+  (`tests/raw_public_keys.rs`) — they compile and pass cleanly under `--all-features`
+  (verified: 3/3 tests green).
+- `oxiarc-deflate`: 0.3.6 → 0.4.1.
+- `oxicrypto-core` / `oxicrypto-adapter-aws-lc` (dev-dependency only — `oxitls-adapter-aws-lc`'s
+  wave8 coexistence test and the `oxitls-bench` AEAD/handshake comparison benches): 0.2.1 →
+  0.3.0. No production code path is affected (`Cargo.lock` is not committed in this workspace,
+  per `.gitignore`; the bump is a `Cargo.toml` requirement change only).
+- `p256` / `p384` (workspace-level, used by `oxitls-rcgen`): 0.14.0-rc.15 → 0.14.0 (stable
+  release, dropping the release-candidate pin now that upstream has cut 0.14.0).
+
+### Added
+- Workspace-root `rustfmt.toml` and `clippy.toml` (msrv `"1.89"`, matching
+  `rust-version` in the workspace `Cargo.toml`).
+- Three new fuzz targets alongside the existing `client_config_parser`, covering oxitls's
+  own hand-rolled, attacker-facing parsers rather than only the upstream `rustls-pemfile`
+  surface: `sct_list_parser` (RFC 6962 §3.3 SCT list wire format), `precert_hash_parser`
+  (RFC 6962 §3.2 precert_entry TBSCertificate reconstruction), and `ocsp_staple_parser`
+  (end-to-end OCSP staple verification via the public `OcspClientVerifier` trait entry
+  point, against a fixed valid cert pair with fuzzed staple bytes).
+- Regression tests for the `labeled_expand` panic-to-`Result` conversion
+  (`labeled_expand_short_prk_returns_err_not_panic`,
+  `labeled_expand_oversized_l_returns_err_not_panic`) and for the leaf-only-chain OCSP fix
+  (`self_signed_cert_detected_as_self_issuer`, `ca_signed_leaf_not_detected_as_self_issuer`,
+  `garbage_cert_not_self_signed`, `no_issuer_no_delegated_signer_is_unparseable_not_badsignature`,
+  `softfail_leaf_only_chain_does_not_hard_fail`,
+  `hardrequire_leaf_only_chain_fails_as_unparseable_not_badsignature`).
+
+---
+
 ## [0.2.1] - 2026-07-17
 
 ### Security
-- **RUSTSEC-2026-0104** (rustls-webpki 0.102.x CRL-parsing panic) is eliminated from the
-  Pure Rust dependency graph. The `rustls-rustcrypto` workspace dependency now resolves to a
-  new in-workspace crate, `oxitls-rustcrypto-provider` — an in-oxitls fork of
-  `rustls-rustcrypto` 0.0.2-alpha with the `webpki` / `rustls-webpki` dependency removed
-  entirely; certificate and signature algorithm identifiers are routed through
-  `rustls-pki-types::alg_id` instead. The swap is transparent to callers: the workspace
+- **RUSTSEC-2026-0104** (rustls-webpki 0.102.x CRL-parsing panic) is eliminated from every
+  normal (non-dev) oxitls dependency path. The `rustls-rustcrypto` workspace dependency now
+  resolves to a new in-workspace crate, `oxitls-rustcrypto-provider` — an in-oxitls fork of
+  `rustls-rustcrypto` 0.0.2-alpha with the `webpki` / `rustls-webpki` 0.102.x dependency
+  removed entirely; certificate and signature algorithm identifiers are routed through
+  `rustls-pki-types::alg_id` instead. (Scope note: `rustls` itself still uses the current,
+  unaffected `rustls-webpki` 0.103.x for path validation — a different, non-CVE'd version.
+  The vulnerable 0.102.x can still appear in *this workspace's* own `Cargo.lock` through the
+  bench-only `oxihttp` dev-dependency, which transitively pulls the published `oxitls` 0.2.0;
+  that dev/bench edge is not part of any downstream consumer's dependency graph and will clear
+  once `oxihttp` publishes a release built against `oxitls` ^0.3.) The swap is transparent to callers: the workspace
   `Cargo.toml` renames the dependency
   (`rustls-rustcrypto = { package = "oxitls-rustcrypto-provider", ... }`), so
   `oxitls-adapter-rustls-rustcrypto` keeps compiling against the unchanged

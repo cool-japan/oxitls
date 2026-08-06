@@ -30,8 +30,11 @@ rcgen = ["dep:oxitls-rcgen"]
 quic-preview = ["pure"]
 # Passthrough for the generic-transport GAT traits in oxitls-core.
 generic-transport = ["oxitls-core/generic-transport"]
-# Namespace reservation for post-quantum key exchange (X25519MLKEM768).
-# Full wiring is deferred to Wave 6 pending rustls KX-group API stabilisation.
+# Post-quantum hybrid key exchange (X25519MLKEM768, draft-ietf-tls-ecdhe-mlkem)
+# — fully wired (Wave 6 complete): real encapsulate/decapsulate via ml-kem +
+# x25519-dalek (see oxitls-adapter-rustls-rustcrypto/src/kx.rs), selected by
+# both tls13::client::ClientBuilder and tls13::server::ServerBuilder when
+# enabled.
 post-quantum = ["dep:oxitls-adapter-rustls-rustcrypto", "oxitls-adapter-rustls-rustcrypto/post-quantum"]
 # Encrypted Client Hello (RFC 8449) support: real ECH config-list or GREASE mode.
 # Implies `pure`; wires HPKE suites from the adapter behind the `ech` sub-feature.
@@ -55,8 +58,7 @@ tokio = { workspace = true, optional = true }
 aes-gcm   = { workspace = true, optional = true }
 getrandom = { workspace = true, optional = true }
 # sha2: SHA-256 fingerprinting for anti-replay ticket tracking (no ring).
-# Not workspace-shared (per workspace policy comment) — added directly here.
-sha2 = { version = "0.11", optional = true }
+sha2 = { workspace = true, optional = true }
 # tracing: zero-cost log facade for rotation task warnings.
 tracing = { workspace = true }
 

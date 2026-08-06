@@ -1,5 +1,41 @@
 [advisories]
-ignore = []
+ignore = [
+  # RUSTSEC-2023-0071 (Marvin Attack): rsa 0.9's PKCS#1 v1.5 *decryption*
+  # path has a timing side-channel. oxitls never uses rsa for decryption /
+  # key transport -- only for RSA signing (oxitls-rustcrypto-provider
+  # src/sign/rsa.rs) and RSA signature verification (verify/rsa.rs,
+  # verifier/ocsp_crypto.rs), neither of which is affected. No non-vulnerable
+  # release of the `rsa` crate exists upstream yet; tracked for removal once
+  # one ships.
+  { id = "RUSTSEC-2023-0071", reason = "rsa 0.9 used only for sign/verify (TLS CertificateVerify, OCSP signature checks), never PKCS#1v1.5 decryption/key transport -- the Marvin timing side-channel is unreachable" },
+
+  # RUSTSEC-2024-0436: `paste` is an unmaintained proc-macro with no runtime
+  # code (it only expands at compile time). Pulled transitively via
+  # module-lattice (ml-kem) and aws-lc-sys's build graph -- upstream's
+  # choice, not a direct oxitls dependency. No associated vulnerability.
+  { id = "RUSTSEC-2024-0436", reason = "paste is a compile-time-only proc-macro (no runtime code); pulled transitively via ml-kem/aws-lc-sys, upstream's choice, no known vulnerability" },
+
+  # RUSTSEC-2025-0134: rustls-pemfile (workspace dep, PEM cert/key parsing)
+  # is a maintenance-status notice, not a CVE. Tracked for migration if/when
+  # a maintained successor lands in the rustls ecosystem.
+  { id = "RUSTSEC-2025-0134", reason = "maintenance-status notice only (no CVE); rustls-pemfile still used for PEM cert/key parsing, tracked for replacement" },
+
+  # RUSTSEC-2026-0049 / -0098 / -0099 / -0104: all four resolve to the SAME
+  # underlying edge -- rustls-webpki 0.102.8 pulled by the crates.io-published
+  # `rustls-rustcrypto` 0.0.2-alpha, itself pulled by the crates.io-published
+  # `oxitls-adapter-rustls-rustcrypto` 0.2.0 / `oxitls` 0.2.0, which arrive
+  # ONLY via the bench-only `oxihttp = "0.2.0"` dev-dependency (see
+  # oxitls-bench/Cargo.toml). This workspace's own code resolves
+  # `rustls-rustcrypto` to the in-tree `oxitls-rustcrypto-provider` fork,
+  # which removes rustls-webpki entirely (CHANGELOG [0.2.1]). The dev/bench
+  # edge never reaches a downstream consumer of the published library and
+  # will clear once `oxihttp` publishes a release built against oxitls ^0.3
+  # (see README.md Anchor Crates scope note).
+  { id = "RUSTSEC-2026-0049", reason = "rustls-webpki 0.102.8 via bench-only oxihttp=0.2.0 dev-dep -> published oxitls 0.2.0 -> registry rustls-rustcrypto 0.0.2-alpha; dev/bench-only, not reachable from the library; clears once oxihttp republishes against oxitls ^0.3" },
+  { id = "RUSTSEC-2026-0098", reason = "same rustls-webpki 0.102.8 dev/bench-only edge as RUSTSEC-2026-0049" },
+  { id = "RUSTSEC-2026-0099", reason = "same rustls-webpki 0.102.8 dev/bench-only edge as RUSTSEC-2026-0049" },
+  { id = "RUSTSEC-2026-0104", reason = "same rustls-webpki 0.102.8 dev/bench-only edge as RUSTSEC-2026-0049; this is the exact CVE oxitls-rustcrypto-provider was forked to eliminate from the library's own edge (CHANGELOG [0.2.1])" },
+]
 
 [licenses]
 allow = ["Apache-2.0", "MIT", "ISC", "Unicode-3.0", "BSD-2-Clause", "BSD-3-Clause", "OpenSSL"]
@@ -8,13 +44,35 @@ unused-allowed-license = "allow"
 [bans]
 multiple-versions = "warn"
 deny = [
-  { name = "ring" },
-  { name = "aws-lc-rs" },
-  { name = "aws-lc-sys" },
+  # ring / aws-lc-rs / aws-lc-sys / security-framework: banned from the
+  # *normal* (non-dev) dependency edge of any crate not explicitly excepted
+  # below -- the default closure must stay Pure Rust / FFI-free. Each is
+  # reachable only via a specific, intentional dev-only, bench-only, or
+  # quarantine-crate edge, scoped with `wrappers` so exactly that edge is
+  # allowed while any NEW normal-edge dependency on these crates still fails
+  # the gate.
+  #
+  # ring: pulled by `rcgen` (only when its "ring" feature is enabled, which
+  # happens exclusively in dev-dependency overrides for KeyPair::generate())
+  # and directly by oxitls-bench's AEAD-comparison bench (dev-dependency).
+  { name = "ring", wrappers = ["rcgen", "oxitls-bench"] },
+  # aws-lc-rs: pulled by the published `oxicrypto-adapter-aws-lc` dev-dep
+  # (wave8 coexistence test), by oxitls-adapter-aws-lc's own optional
+  # `aws-lc` feature (opt-in, off by default) plus its dev-deps, and by
+  # oxitls-bench's throughput-comparison bench (dev-dependency).
+  { name = "aws-lc-rs", wrappers = ["oxicrypto-adapter-aws-lc", "oxitls-adapter-aws-lc", "oxitls-bench"] },
+  # aws-lc-sys: the C/FFI build of aws-lc-rs; only ever pulled in by aws-lc-rs
+  # itself, which is scoped above.
+  { name = "aws-lc-sys", wrappers = ["aws-lc-rs"] },
   { name = "openssl" },
   { name = "openssl-sys" },
   { name = "native-tls" },
-  { name = "security-framework" },
+  # security-framework: a NORMAL (non-dev) dependency of oxitls-native-certs,
+  # the deliberate "impure-by-design quarantine crate" for OS-native
+  # certificate stores (see crates/oxitls-native-certs/src/lib.rs doc
+  # comment) -- callers who need OS-native trust roots opt in by depending on
+  # that crate directly. Never pulled in by any other workspace member.
+  { name = "security-framework", wrappers = ["oxitls-native-certs"] },
 ]
 
 [sources]

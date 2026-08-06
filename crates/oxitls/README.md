@@ -14,10 +14,10 @@ The facade also performs **provider selection** through feature flags. The defau
 ```toml
 [dependencies]
 # Default: Pure-Rust TLS + Mozilla webpki roots
-oxitls = "0.2.1"
+oxitls = "0.3.0"
 
 # HTTP/2 over TLS and Pure-Rust cert generation
-oxitls = { version = "0.2.1", features = ["h2", "rcgen"] }
+oxitls = { version = "0.3.0", features = ["h2", "rcgen"] }
 ```
 
 For the aws-lc-rs provider (FIPS/high-throughput) or the PKCS#11 HSM/TPM signer, add the respective adapter crate directly — they are not feature flags of the `oxitls` facade as of 0.2.0.

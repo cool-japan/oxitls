@@ -22,7 +22,7 @@ rustls = { workspace = true }
 rustls-pki-types = { workspace = true }
 rustls-pemfile = { workspace = true }
 webpki-roots = { workspace = true }
-sha2 = { version = "0.11", default-features = false, features = ["alloc"] }
+sha2 = { workspace = true }
 x509-parser = { workspace = true }
 lru = { workspace = true }
 time = { workspace = true }

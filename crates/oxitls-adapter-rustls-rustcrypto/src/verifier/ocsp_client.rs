@@ -187,6 +187,20 @@ fn responder_is_issuer(responder_id: &ResponderId, issuer: &x509_cert::Certifica
     }
 }
 
+/// Return `true` when the certificate's subject and issuer distinguished names
+/// are identical, i.e. it is (structurally) self-signed and may therefore act as
+/// its own issuer for OCSP CertID / signer resolution.
+///
+/// Any parse failure yields `false`: we must never treat an unparseable or
+/// CA-signed end-entity as its own issuer, because doing so would resolve the
+/// OCSP signer key to the leaf's own SPKI and reject a legitimate staple.
+fn end_entity_is_self_signed(end_entity_der: &[u8]) -> bool {
+    match x509_cert::Certificate::from_der(end_entity_der) {
+        Ok(cert) => cert.tbs_certificate.subject == cert.tbs_certificate.issuer,
+        Err(_) => false,
+    }
+}
+
 /// Extract the DER of a `x509_cert::Certificate`.
 fn cert_to_der(cert: &x509_cert::Certificate) -> Result<Vec<u8>, OcspVerifyError> {
     cert.to_der()
@@ -262,6 +276,20 @@ fn check_ocsp_staple(
     // Determine which key to verify with.
     let signer_spki_result = determine_signer_spki(&basic, issuer_cert_der);
     match signer_spki_result {
+        Err(OcspVerifyError::ResponseUnparseable(msg)) => {
+            // The signer key could not be *resolved* (for example the peer sent
+            // a leaf-only chain so no issuer certificate is available and the
+            // response carried no delegated signer, or an internal DER
+            // re-encode failed). This is an inability to verify the staple, not
+            // proof that its signature is forged, so it must be governed by the
+            // configured policy rather than raised as an unconditional
+            // BadSignature hard failure.
+            tracing::warn!(
+                error = %msg,
+                "OCSP signer key could not be resolved; treating staple as unparseable"
+            );
+            return OcspCheckResult::Unparseable;
+        }
         Err(e) => {
             tracing::warn!(error = %e, "OCSP signer resolution failed");
             return OcspCheckResult::BadSignature(e.to_string());
@@ -536,12 +564,21 @@ impl ServerCertVerifier for OcspClientVerifier {
             );
         }
 
-        // The issuer of the end-entity cert is the first intermediate, or the
-        // end-entity itself for self-signed certs.
-        let issuer_der: Option<&[u8]> = intermediates
-            .first()
-            .map(|c| c.as_ref())
-            .or_else(|| Some(end_entity.as_ref()));
+        // Resolve the certificate that issued the end-entity: normally the first
+        // intermediate in the presented chain. When the peer sends a leaf-only
+        // chain we may treat the end-entity as its own issuer *only* if it is
+        // self-signed. Synthesising a bogus issuer from a CA-signed leaf would
+        // make a legitimate staple fail signature verification (the resolved
+        // signer key would be the leaf's own SPKI), turning a valid OCSP staple
+        // into an unconditional handshake failure that even SoftFail cannot
+        // escape. In the leaf-only, non-self-signed case we pass `None` so the
+        // missing-issuer situation is handled as an unverifiable (and therefore
+        // policy-governed) staple rather than a forged one.
+        let issuer_der: Option<&[u8]> = match intermediates.first() {
+            Some(first) => Some(first.as_ref()),
+            None if end_entity_is_self_signed(end_entity.as_ref()) => Some(end_entity.as_ref()),
+            None => None,
+        };
 
         match check_ocsp_staple(ocsp_response, end_entity.as_ref(), issuer_der, now) {
             OcspCheckResult::Revoked => {
@@ -797,5 +834,215 @@ mod tests {
             matches!(result, OcspCheckResult::Unparseable),
             "got {result:?}"
         );
+    }
+
+    /// A structurally self-signed certificate (subject == issuer) is recognised
+    /// as its own issuer.
+    #[test]
+    fn self_signed_cert_detected_as_self_issuer() {
+        let (ee_der, _issuer) = self_signed();
+        assert!(
+            end_entity_is_self_signed(&ee_der),
+            "self-signed cert must be treated as its own issuer"
+        );
+    }
+
+    /// A CA-signed leaf (subject != issuer) must NOT be treated as its own
+    /// issuer. Regression guard for the bug where a leaf-only chain caused the
+    /// end-entity to be synthesised as its own OCSP issuer, resolving the signer
+    /// key to the leaf's SPKI and turning a legitimate staple into an
+    /// unconditional BadSignature handshake failure.
+    #[test]
+    fn ca_signed_leaf_not_detected_as_self_issuer() {
+        use oxitls_rcgen::{generate_ca, generate_ca_signed_leaf, SigningAlgorithm};
+
+        let ca = generate_ca("Regression Root CA", SigningAlgorithm::EcdsaP256).expect("ca gen");
+        let leaf = generate_ca_signed_leaf(&["leaf.example"], SigningAlgorithm::EcdsaP256, &ca)
+            .expect("leaf gen");
+        assert!(
+            !end_entity_is_self_signed(&leaf.cert_der),
+            "CA-signed leaf must not be treated as its own issuer"
+        );
+        // The CA itself is self-signed and must be recognised as such.
+        assert!(
+            end_entity_is_self_signed(&ca.certified_key.cert_der),
+            "root CA is self-signed"
+        );
+    }
+
+    /// Malformed DER must fail closed: never treat garbage as self-signed.
+    #[test]
+    fn garbage_cert_not_self_signed() {
+        assert!(!end_entity_is_self_signed(b"not a certificate"));
+        assert!(!end_entity_is_self_signed(&[]));
+    }
+
+    /// End-to-end regression for the leaf-only-chain OCSP bug: when the peer
+    /// sends a CA-signed end-entity but no issuer certificate is available and
+    /// the response carries no delegated signer, the signer key cannot be
+    /// resolved. This must surface as a policy-governed `Unparseable` rather
+    /// than an unconditional `BadSignature`, so that SoftFail can still allow
+    /// the handshake to proceed.
+    #[test]
+    fn no_issuer_no_delegated_signer_is_unparseable_not_badsignature() {
+        // Build a minimal BasicOcspResponse with no delegated signer certs so
+        // that `determine_signer_spki(None issuer)` returns ResponseUnparseable.
+        let (_ee_der, issuer) = self_signed();
+        let serial = issuer.tbs_certificate.serial_number.clone();
+        let sr = good_single(&issuer, serial, gtime(2025, 1, 1), Some(gtime(2026, 1, 1)));
+        let basic = BasicOcspResponse {
+            tbs_response_data: x509_ocsp::ResponseData {
+                version: x509_ocsp::Version::default(),
+                responder_id: ResponderId::ByName(issuer.tbs_certificate.subject.clone()),
+                produced_at: gtime(2025, 1, 1),
+                responses: vec![sr],
+                response_extensions: None,
+            },
+            signature_algorithm: issuer.signature_algorithm.clone(),
+            signature: x509_cert::der::asn1::BitString::from_bytes(&[0u8; 8]).expect("bitstring"),
+            certs: None,
+        };
+        // No issuer available (leaf-only, non-self-signed peer chain).
+        let result = determine_signer_spki(&basic, None);
+        assert!(
+            matches!(result, Err(OcspVerifyError::ResponseUnparseable(_))),
+            "no issuer and no delegated signer must be reported as unresolvable \
+             (ResponseUnparseable), not a trust failure; got {result:?}"
+        );
+    }
+
+    /// Minimal inner verifier that unconditionally accepts, so the test can
+    /// isolate the OCSP staple policy decision made *before* delegation.
+    #[derive(Debug)]
+    struct AlwaysOk;
+
+    impl ServerCertVerifier for AlwaysOk {
+        fn verify_server_cert(
+            &self,
+            _end_entity: &CertificateDer<'_>,
+            _intermediates: &[CertificateDer<'_>],
+            _server_name: &ServerName<'_>,
+            _ocsp_response: &[u8],
+            _now: UnixTime,
+        ) -> Result<ServerCertVerified, RustlsError> {
+            Ok(ServerCertVerified::assertion())
+        }
+
+        fn verify_tls12_signature(
+            &self,
+            _message: &[u8],
+            _cert: &CertificateDer<'_>,
+            _dss: &DigitallySignedStruct,
+        ) -> Result<HandshakeSignatureValid, RustlsError> {
+            Ok(HandshakeSignatureValid::assertion())
+        }
+
+        fn verify_tls13_signature(
+            &self,
+            _message: &[u8],
+            _cert: &CertificateDer<'_>,
+            _dss: &DigitallySignedStruct,
+        ) -> Result<HandshakeSignatureValid, RustlsError> {
+            Ok(HandshakeSignatureValid::assertion())
+        }
+
+        fn supported_verify_schemes(&self) -> Vec<SignatureScheme> {
+            vec![SignatureScheme::ED25519]
+        }
+    }
+
+    /// Build a well-formed OCSP staple (parses fully as a Successful
+    /// `BasicOcspResponse`) whose signature is garbage. The response's CertID is
+    /// bound to `issuer`, and its responder is named as `issuer`'s subject.
+    fn well_formed_staple_with_bad_signature(issuer: &x509_cert::Certificate) -> Vec<u8> {
+        let serial = issuer.tbs_certificate.serial_number.clone();
+        let sr = good_single(issuer, serial, gtime(2025, 1, 1), Some(gtime(2026, 1, 1)));
+        let basic = BasicOcspResponse {
+            tbs_response_data: x509_ocsp::ResponseData {
+                version: x509_ocsp::Version::default(),
+                responder_id: ResponderId::ByName(issuer.tbs_certificate.subject.clone()),
+                produced_at: gtime(2025, 1, 1),
+                responses: vec![sr],
+                response_extensions: None,
+            },
+            signature_algorithm: issuer.signature_algorithm.clone(),
+            signature: x509_cert::der::asn1::BitString::from_bytes(&[0u8; 8]).expect("bitstring"),
+            certs: None,
+        };
+        x509_ocsp::OcspResponse::successful(basic)
+            .expect("build OcspResponse")
+            .to_der()
+            .expect("encode OcspResponse DER")
+    }
+
+    /// End-to-end regression for the leaf-only-chain OCSP bug at the policy
+    /// level. A `SoftFail` `OcspClientVerifier` handed a CA-signed end-entity
+    /// with an *empty* intermediates list and a non-empty (but unverifiable,
+    /// because no issuer is available) staple must NOT hard-fail the handshake:
+    /// the missing issuer means the staple is unverifiable, which SoftFail is
+    /// allowed to wave through. Before the fix, `verify_server_cert` synthesised
+    /// the leaf as its own issuer, producing an unconditional `General`
+    /// signature error that even SoftFail could not escape.
+    #[test]
+    fn softfail_leaf_only_chain_does_not_hard_fail() {
+        use oxitls_rcgen::{generate_ca, generate_ca_signed_leaf, SigningAlgorithm};
+
+        let ca = generate_ca("Regression Root CA", SigningAlgorithm::Ed25519).expect("ca gen");
+        let ca_cert =
+            x509_cert::Certificate::from_der(&ca.certified_key.cert_der).expect("parse ca");
+        let leaf = generate_ca_signed_leaf(&["leaf.example"], SigningAlgorithm::Ed25519, &ca)
+            .expect("leaf gen");
+
+        let staple = well_formed_staple_with_bad_signature(&ca_cert);
+
+        let verifier = OcspClientVerifier::new(Arc::new(AlwaysOk), OcspClientPolicy::SoftFail);
+        let leaf_der = CertificateDer::from(leaf.cert_der.clone());
+        let server_name = ServerName::try_from("leaf.example").expect("server name");
+
+        let result = verifier.verify_server_cert(
+            &leaf_der,
+            &[], // leaf-only chain: no intermediates
+            &server_name,
+            &staple,
+            now_2025_05(),
+        );
+        assert!(
+            result.is_ok(),
+            "SoftFail with a leaf-only chain and an unverifiable staple must not \
+             hard-fail the handshake; got {result:?}"
+        );
+    }
+
+    /// The same leaf-only, unverifiable-staple situation under `HardRequire`
+    /// must still fail (SoftFail is the escape hatch, not HardRequire) — but it
+    /// must fail as an *unparseable/absent* staple, never as a forged-signature
+    /// (`BadSignature`) error synthesised from a bogus self-issuer.
+    #[test]
+    fn hardrequire_leaf_only_chain_fails_as_unparseable_not_badsignature() {
+        use oxitls_rcgen::{generate_ca, generate_ca_signed_leaf, SigningAlgorithm};
+
+        let ca = generate_ca("Regression Root CA", SigningAlgorithm::Ed25519).expect("ca gen");
+        let ca_cert =
+            x509_cert::Certificate::from_der(&ca.certified_key.cert_der).expect("parse ca");
+        let leaf = generate_ca_signed_leaf(&["leaf.example"], SigningAlgorithm::Ed25519, &ca)
+            .expect("leaf gen");
+        let staple = well_formed_staple_with_bad_signature(&ca_cert);
+
+        let verifier = OcspClientVerifier::new(Arc::new(AlwaysOk), OcspClientPolicy::HardRequire);
+        let leaf_der = CertificateDer::from(leaf.cert_der.clone());
+        let server_name = ServerName::try_from("leaf.example").expect("server name");
+
+        let result =
+            verifier.verify_server_cert(&leaf_der, &[], &server_name, &staple, now_2025_05());
+        match result {
+            Err(RustlsError::General(msg)) => assert!(
+                msg.contains("absent or unparseable"),
+                "HardRequire must reject a leaf-only unverifiable staple as \
+                 absent/unparseable, not as a forged signature; got: {msg}"
+            ),
+            other => {
+                panic!("expected HardRequire General(absent/unparseable) error, got {other:?}")
+            }
+        }
     }
 }

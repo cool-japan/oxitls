@@ -4,15 +4,46 @@ version = "0.1.0"
 edition = "2021"
 publish = false
 
+# This crate is excluded from the parent oxitls workspace (see the
+# workspace's root Cargo.toml `exclude` list), which per Cargo's rules makes
+# it a candidate *member* of the nearest ancestor workspace by default. An
+# explicit empty `[workspace]` table declares it a standalone package instead
+# -- the standard cargo-fuzz convention -- so it resolves its own
+# independent Cargo.lock and never inherits `[workspace.dependencies]`
+# (every dependency below is pinned directly for that reason).
+[workspace]
+
 [package.metadata]
 cargo-fuzz = true
 
 [dependencies]
 libfuzzer-sys = "0.4"
 rustls-pemfile = "2.2"
+rustls = { version = "0.23", default-features = false, features = ["std", "tls12"] }
+rustls-pki-types = "1"
+oxitls-adapter-rustls-rustcrypto = { path = ".." }
+oxitls-rcgen = { path = "../../oxitls-rcgen" }
 
 [[bin]]
 name = "client_config_parser"
 path = "fuzz_targets/client_config_parser.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "sct_list_parser"
+path = "fuzz_targets/sct_list_parser.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "precert_hash_parser"
+path = "fuzz_targets/precert_hash_parser.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "ocsp_staple_parser"
+path = "fuzz_targets/ocsp_staple_parser.rs"
 test = false
 doc = false

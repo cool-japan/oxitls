@@ -14,7 +14,7 @@ TLS 1.2 handshakes. 60 tests passing (default features) / 97 passing
 - [x] Add OCSP stapling support: RFC 6960 signer crypto verification in `OcspClientVerifier` with `SoftFail`/`HardRequire`/`Disabled` policies
 - [x] Add certificate pinning: `CertPinVerifier` implementing `rustls::client::danger::ServerCertVerifier` with SHA-256 pin matching
 - [x] Add custom `ServerCertVerifier` wrapper for user-supplied verification callbacks
-- [x] RFC 7250 raw public key support: `RawPublicKeyServerVerifier` + `RawPublicKeyClientVerifier` + resolver helpers (`server_raw_public_key_resolver`, `client_raw_public_key_resolver`) — written; full integration test blocked pending workspace dep-version reconciliation (der 0.7→0.8 / signature 2→3 conflict from PQ slice breaks ocsp_*.rs)
+- [x] RFC 7250 raw public key support: `RawPublicKeyServerVerifier` + `RawPublicKeyClientVerifier` + resolver helpers (`server_raw_public_key_resolver`, `client_raw_public_key_resolver`) — written, integration tests compile and pass (tests/raw_public_keys.rs, 3 tests, verified with `--all-features`)
 - [x] Add SSLKEYLOGFILE support via `KeyLogBridge` on both client and server configs
 - [x] Add `RustcryptoClientConfigBuilder` with fluent API (Wave 2)
 - [x] Add `RustcryptoServerConfigBuilder` at adapter level (Wave 2)
@@ -39,9 +39,9 @@ TLS 1.2 handshakes. 60 tests passing (default features) / 97 passing
 - [x] Integration test: SSLKEYLOGFILE writes key material to temp file, NSS key log format validated (wave2_tests.rs)
 - [x] Unit test: `supported_cipher_suites()` returns non-empty list with expected TLS 1.3 suites
 - [x] Unit test: `supported_versions()` includes TLS 1.3, conditionally TLS 1.2
-- [x] Integration test: RPK server pinned match succeeds (raw_public_keys.rs — Wave 6 RPK) [compile-blocked — see workspace dep conflict note]
-- [x] Integration test: RPK wrong pin fails (raw_public_keys.rs — Wave 6 RPK) [compile-blocked]
-- [x] Integration test: RPK mutual auth both succeed (raw_public_keys.rs — Wave 6 RPK) [compile-blocked]
+- [x] Integration test: RPK server pinned match succeeds (raw_public_keys.rs — Wave 6 RPK)
+- [x] Integration test: RPK wrong pin fails (raw_public_keys.rs — Wave 6 RPK)
+- [x] Integration test: RPK mutual auth both succeed (raw_public_keys.rs — Wave 6 RPK)
 - [x] Fuzz test: malformed certificate DER input to `client_config()` does not panic
 
 ## Performance

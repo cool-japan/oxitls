@@ -11,14 +11,14 @@ This crate is **Pure Rust** (`#![forbid(unsafe_code)]`). It builds on `rustls` f
 
 ```toml
 [dependencies]
-oxitls-core = "0.2.1"
+oxitls-core = "0.3.0"
 ```
 
 To opt into the generic (transport-preserving) connector/acceptor traits:
 
 ```toml
 [dependencies]
-oxitls-core = { version = "0.2.1", features = ["generic-transport"] }
+oxitls-core = { version = "0.3.0", features = ["generic-transport"] }
 ```
 
 ## Quick Start

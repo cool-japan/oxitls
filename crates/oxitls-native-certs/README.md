@@ -19,7 +19,7 @@ For most applications the bundled Mozilla CA bundle in `oxitls-webpki-roots` (th
 
 ```toml
 [dependencies]
-oxitls-native-certs = "0.2.1"
+oxitls-native-certs = "0.3.0"
 ```
 
 Note: `oxitls-native-certs` is **not** a feature of the `oxitls` facade — add it directly to your `Cargo.toml`.

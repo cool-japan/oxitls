@@ -49,19 +49,21 @@ pub fn labeled_extract(suite_id: &[u8], salt: &[u8], label: &[u8], ikm: &[u8]) -
 ///
 /// Returns `l` bytes of output keying material.
 ///
-/// # Panics / Errors
-/// Returns an empty Vec (and panics in debug mode) if `l` exceeds HKDF maximum
-/// (255 * 32 bytes for SHA-256).  In practice callers request ≤ 64 bytes.
-pub fn labeled_expand(suite_id: &[u8], prk: &[u8], label: &[u8], info: &[u8], l: usize) -> Vec<u8> {
-    let hkdf = Hkdf::<Sha256>::from_prk(prk).expect("PRK must be at least 32 bytes for SHA-256");
-    let l_bytes = i2osp2(u16::try_from(l).expect("LabeledExpand length must fit in u16"));
-    let mut okm = vec![0u8; l];
-    hkdf.expand_multi_info(
-        &[l_bytes.as_slice(), HPKE_V1, suite_id, label, info],
-        &mut okm,
-    )
-    .expect("HKDF expand: requested length within HKDF maximum");
-    okm
+/// # Errors
+/// Returns `Err` if `prk` is shorter than 32 bytes, if `l` does not fit in a
+/// `u16`, or if `l` exceeds the HKDF-SHA256 maximum (255 * 32 = 8160 bytes).
+/// This is a thin, non-panicking wrapper around [`labeled_expand_checked`]
+/// (defined below `key_schedule_base`) — kept as a free function so internal
+/// callers with compile-time-constant `l` (12, 16, 32) don't need to move
+/// their call sites relative to `key_schedule_base`.
+pub fn labeled_expand(
+    suite_id: &[u8],
+    prk: &[u8],
+    label: &[u8],
+    info: &[u8],
+    l: usize,
+) -> Result<Vec<u8>, rustls::Error> {
+    labeled_expand_checked(suite_id, prk, label, info, l)
 }
 
 /// Intermediate material produced by the HPKE base-mode key schedule.
@@ -105,17 +107,17 @@ pub fn key_schedule_base(
     let secret = labeled_extract(suite_id, shared_secret, b"secret", default_psk);
 
     // key = LabeledExpand(secret, "key", ks_context, Nk)
-    let key = labeled_expand(suite_id, &secret, b"key", &ks_context, nk);
+    let key = labeled_expand(suite_id, &secret, b"key", &ks_context, nk)?;
 
     // base_nonce = LabeledExpand(secret, "base_nonce", ks_context, Nn=12)
-    let base_nonce_vec = labeled_expand(suite_id, &secret, b"base_nonce", &ks_context, 12);
+    let base_nonce_vec = labeled_expand(suite_id, &secret, b"base_nonce", &ks_context, 12)?;
 
     let mut base_nonce = [0u8; 12];
     base_nonce.copy_from_slice(&base_nonce_vec);
 
     // exporter_secret = LabeledExpand(secret, "exp", ks_context, Nh=32)
     // RFC 9180 §5.1: exporter_secret is surfaced for use by Context.Export (§5.3).
-    let exp_vec = labeled_expand(suite_id, &secret, b"exp", &ks_context, 32);
+    let exp_vec = labeled_expand(suite_id, &secret, b"exp", &ks_context, 32)?;
     let mut exporter_secret = [0u8; 32];
     exporter_secret.copy_from_slice(&exp_vec);
 
@@ -128,9 +130,11 @@ pub fn key_schedule_base(
 
 /// RFC 9180 §5.3 Context.Export: length-checked LabeledExpand.
 ///
-/// Unlike [`labeled_expand`], which panics on oversized `l`, this variant returns
-/// `Err` instead. Callers on the public Export path (where `l` may be attacker-
-/// influenced) MUST use this function.
+/// This is the underlying implementation shared by [`labeled_expand`]. It is
+/// kept as a separate, explicitly-named entry point because the public
+/// Export path (where `l` may be attacker-influenced) documents its
+/// error-returning contract independently of the internal key-schedule
+/// caller in [`key_schedule_base`].
 ///
 /// The maximum output length for HKDF-SHA256 is `255 * HashLen = 255 * 32 = 8160` bytes.
 pub fn labeled_expand_checked(
@@ -151,7 +155,7 @@ pub fn labeled_expand_checked(
     let hkdf = Hkdf::<Sha256>::from_prk(prk).map_err(|_| {
         rustls::Error::General("HPKE Export: invalid PRK (must be at least 32 bytes)".into())
     })?;
-    let l_bytes = l_u16.to_be_bytes();
+    let l_bytes = i2osp2(l_u16);
     let mut okm = vec![0u8; l];
     hkdf.expand_multi_info(
         &[l_bytes.as_slice(), HPKE_V1, suite_id, label, info],
@@ -180,8 +184,29 @@ mod tests {
         let suite_id = b"HPKE\x00\x20\x00\x01\x00\x01";
         let prk = labeled_extract(suite_id, b"", b"key", b"");
         for l in [12usize, 16, 32] {
-            let out = labeled_expand(suite_id, &prk, b"key", b"ctx", l);
+            let out = labeled_expand(suite_id, &prk, b"key", b"ctx", l).expect("l within bounds");
             assert_eq!(out.len(), l);
         }
+    }
+
+    /// Regression guard: `labeled_expand` must return `Err`, not panic, on a
+    /// too-short PRK. Before this fix it was `.expect()`-based and would abort
+    /// the process (a DoS if `l`/`prk` were ever attacker-influenced).
+    #[test]
+    fn labeled_expand_short_prk_returns_err_not_panic() {
+        let suite_id = b"HPKE\x00\x20\x00\x01\x00\x01";
+        let short_prk = [0u8; 4]; // shorter than SHA-256's 32-byte output
+        let result = labeled_expand(suite_id, &short_prk, b"key", b"ctx", 16);
+        assert!(result.is_err(), "short PRK must be rejected, not panic");
+    }
+
+    /// Regression guard: `labeled_expand` must return `Err`, not panic, when
+    /// `l` exceeds the HKDF-SHA256 maximum output length.
+    #[test]
+    fn labeled_expand_oversized_l_returns_err_not_panic() {
+        let suite_id = b"HPKE\x00\x20\x00\x01\x00\x01";
+        let prk = labeled_extract(suite_id, b"", b"key", b"");
+        let result = labeled_expand(suite_id, &prk, b"key", b"ctx", 255 * 32 + 1);
+        assert!(result.is_err(), "oversized l must be rejected, not panic");
     }
 }

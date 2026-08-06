@@ -1,10 +1,10 @@
 # OxiTLS TODO
 
-## Status — v0.2.1 — 2026-07-17
+## Status — v0.3.0 released (2026-08-06)
 
 Pure-Rust TLS transport stack at 27,748 SLoC across 11 workspace crates. All M0–M5
-milestones and Waves 6–9 complete, plus ECH/HPKE (RFC 9180) and RFC 8879 cert compression added in v0.1.1, and the RUSTSEC-2026-0104 fix (new `oxitls-rustcrypto-provider` fork crate) plus OCSP/SCT verification hardening added in v0.2.1.
-**358 tests passing** with default features (**443** with `--all-features`).
+milestones and Waves 6–9 complete, plus ECH/HPKE (RFC 9180) and RFC 8879 cert compression added in v0.1.1, the RUSTSEC-2026-0104 fix (new `oxitls-rustcrypto-provider` fork crate) plus OCSP/SCT verification hardening added in v0.2.1, and the leaf-only-chain OCSP fix plus `labeled_expand` panic-to-`Result` conversion added in v0.3.0.
+**364 tests passing** with default features (**451** with `--all-features`).
 
 Release-check performed 2026-06-01 (v0.1.0):
 - cargo check: PASS
@@ -164,6 +164,7 @@ Release-check performed 2026-07-17 (v0.2.1):
 - [x] v0.1.2 release-check (2026-06-10): 424 passed, 10 skipped; wave8 coexist test activated; CHANGELOG/README/TODO finalized; dry-run expected-fail (deps not yet published)
 - [x] v0.2.0 release-check (2026-06-22): 392 tests (aws-lc adapter excluded); oxitls-native-certs quarantine crate shipped; oxitls-webpki-roots purified to Mozilla-only; facade aws-lc/pkcs11 features removed
 - [x] v0.2.1 release-check (2026-07-17): 358 tests default / 443 all-features; RUSTSEC-2026-0104 fixed via new oxitls-rustcrypto-provider fork crate; OCSP CertID-matching + freshness hardening; SCT extraction fix
+- [x] v0.3.0 release-check (2026-08-06): 364 tests default / 451 all-features, 45 doctests, 0 clippy/rustdoc/fmt warnings, `cargo deny check bans` clean; leaf-only-chain OCSP fix + `labeled_expand` panic-to-`Result` conversion; `oxiarc-deflate` 0.3.6→0.4.1 and `oxicrypto-core`/`oxicrypto-adapter-aws-lc` (dev-dep) 0.2.1→0.3.0 bumped; dry-run expected-fail on downstream crates (siblings not yet published)
 
 
 ---

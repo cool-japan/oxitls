@@ -11,14 +11,14 @@ The handshake helpers are generic over the transport `S` (`TcpStream`, `UnixStre
 
 ```toml
 [dependencies]
-oxitls-h2 = "0.2.1"
+oxitls-h2 = "0.3.0"
 ```
 
 Via the façade (enables `oxitls-h2` as the `h2` feature):
 
 ```toml
 [dependencies]
-oxitls = { version = "0.2.1", features = ["h2"] }
+oxitls = { version = "0.3.0", features = ["h2"] }
 ```
 
 ## Quick Start

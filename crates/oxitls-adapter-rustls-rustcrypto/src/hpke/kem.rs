@@ -64,7 +64,15 @@ pub trait DhKem: 'static + Send + Sync {
 ///     return LabeledExpand(eae_prk, "shared_secret", kem_context, Nsecret)
 /// ```
 /// Note: the extract label is `"eae_prk"` (not `"shared_secret"`).
-fn extract_and_expand<K: DhKem>(dh: &[u8], kem_context: &[u8]) -> [u8; 32] {
+///
+/// # Errors
+/// Propagates any error from the underlying `labeled_expand` (HKDF-SHA256
+/// bounds check). In practice `K::NSECRET` is always 32 for the KEMs
+/// implemented in this module, well within bounds, so this is unreachable
+/// today -- but the caller (`encap`/`decap`, both already `Result`-returning)
+/// propagates it rather than panicking, so a future KEM with a larger
+/// `NSECRET` fails closed instead of aborting the process.
+fn extract_and_expand<K: DhKem>(dh: &[u8], kem_context: &[u8]) -> Result<[u8; 32], rustls::Error> {
     let suite_id = K::kem_suite_id();
     // Step 1: LabeledExtract with label "eae_prk"
     let eae_prk = labeled_extract(suite_id.as_slice(), b"", b"eae_prk", dh);
@@ -75,10 +83,15 @@ fn extract_and_expand<K: DhKem>(dh: &[u8], kem_context: &[u8]) -> [u8; 32] {
         b"shared_secret",
         kem_context,
         K::NSECRET,
-    );
+    )?;
+    if out.len() < 32 {
+        return Err(rustls::Error::General(
+            "DHKEM ExtractAndExpand: shared secret shorter than 32 bytes".into(),
+        ));
+    }
     let mut ss = [0u8; 32];
     ss.copy_from_slice(&out[..32]);
-    ss
+    Ok(ss)
 }
 
 // ── DHKEM(X25519, HKDF-SHA256) ────────────────────────────────────────────────
@@ -130,7 +143,7 @@ impl DhKem for KemX25519 {
         kem_context.extend_from_slice(pk_em.as_bytes());
         kem_context.extend_from_slice(pk_r_bytes.as_slice());
 
-        let shared_secret = extract_and_expand::<Self>(dh, &kem_context);
+        let shared_secret = extract_and_expand::<Self>(dh, &kem_context)?;
         let enc = pk_em.as_bytes().to_vec();
 
         Ok((shared_secret, enc))
@@ -166,7 +179,7 @@ impl DhKem for KemX25519 {
         kem_context.extend_from_slice(enc_bytes.as_slice());
         kem_context.extend_from_slice(pk_r.as_bytes());
 
-        Ok(extract_and_expand::<Self>(dh, &kem_context))
+        extract_and_expand::<Self>(dh, &kem_context)
     }
 }
 
@@ -198,7 +211,7 @@ pub(crate) fn x25519_encap_deterministic(
     kem_context.extend_from_slice(pk_em.as_bytes());
     kem_context.extend_from_slice(pk_r_bytes.as_slice());
 
-    let shared_secret = extract_and_expand::<KemX25519>(dh, &kem_context);
+    let shared_secret = extract_and_expand::<KemX25519>(dh, &kem_context)?;
     let enc = pk_em.as_bytes().to_vec();
     Ok((shared_secret, enc))
 }
@@ -249,7 +262,7 @@ impl DhKem for KemP256 {
         kem_context.extend_from_slice(&enc);
         kem_context.extend_from_slice(&pk_r_bytes);
 
-        let shared_secret = extract_and_expand::<Self>(&dh, &kem_context);
+        let shared_secret = extract_and_expand::<Self>(&dh, &kem_context)?;
         Ok((shared_secret, enc))
     }
 
@@ -280,7 +293,7 @@ impl DhKem for KemP256 {
         kem_context.extend_from_slice(enc);
         kem_context.extend_from_slice(&pk_r_bytes);
 
-        Ok(extract_and_expand::<Self>(&dh, &kem_context))
+        extract_and_expand::<Self>(&dh, &kem_context)
     }
 }
 
@@ -328,7 +341,7 @@ pub(crate) fn p256_encap_deterministic(
     kem_context.extend_from_slice(&enc);
     kem_context.extend_from_slice(&pk_r_bytes);
 
-    let shared_secret = extract_and_expand::<KemP256>(&dh, &kem_context);
+    let shared_secret = extract_and_expand::<KemP256>(&dh, &kem_context)?;
     Ok((shared_secret, enc))
 }
 
