@@ -39,21 +39,21 @@ ecosystem-wide remediation for that contamination.
 
 ```toml
 [dependencies]
-oxitls = "0.3.0"
+oxitls = "0.3.1"
 # Pure Rust TLS + WebPKI roots (default)
 # For HTTP/2:
-oxitls = { version = "0.3.0", features = ["h2"] }
+oxitls = { version = "0.3.1", features = ["h2"] }
 # For certificate generation:
-oxitls = { version = "0.3.0", features = ["rcgen"] }
+oxitls = { version = "0.3.1", features = ["rcgen"] }
 # For post-quantum key exchange (X25519+ML-KEM-768):
-oxitls = { version = "0.3.0", features = ["post-quantum"] }
+oxitls = { version = "0.3.1", features = ["post-quantum"] }
 
 # For FIPS / high-throughput (C dependency — separate crate, not a facade feature):
-oxitls-adapter-aws-lc = "0.3.0"
+oxitls-adapter-aws-lc = "0.3.1"
 # For HSM/TPM via PKCS#11 (C dependency — separate crate, not a facade feature):
-oxitls-adapter-pkcs11 = "0.3.0"
+oxitls-adapter-pkcs11 = "0.3.1"
 # For OS-native certificate store (FFI — quarantine crate, add directly):
-oxitls-native-certs = "0.3.0"
+oxitls-native-certs = "0.3.1"
 ```
 
 ## Quick Start

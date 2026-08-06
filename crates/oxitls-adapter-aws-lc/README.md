@@ -14,10 +14,10 @@ Like every OxiTLS adapter, this crate **never** calls `CryptoProvider::install_d
 ```toml
 [dependencies]
 # Reserves the name but pulls in NO C code (default features are empty):
-oxitls-adapter-aws-lc = "0.3.0"
+oxitls-adapter-aws-lc = "0.3.1"
 
 # Opt in to the C-backed aws-lc-rs provider:
-oxitls-adapter-aws-lc = { version = "0.3.0", features = ["aws-lc"] }
+oxitls-adapter-aws-lc = { version = "0.3.1", features = ["aws-lc"] }
 ```
 
 ## Quick Start

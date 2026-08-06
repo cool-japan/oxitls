@@ -14,10 +14,10 @@ The crypto provider used for the handshake itself is supplied by the caller, so 
 ```toml
 [dependencies]
 # Reserves the name but pulls in NO HSM/FFI code (default features are empty):
-oxitls-adapter-pkcs11 = "0.3.0"
+oxitls-adapter-pkcs11 = "0.3.1"
 
 # Opt in to the PKCS#11 signing adapter:
-oxitls-adapter-pkcs11 = { version = "0.3.0", features = ["pkcs11"] }
+oxitls-adapter-pkcs11 = { version = "0.3.1", features = ["pkcs11"] }
 ```
 
 ## Quick Start
