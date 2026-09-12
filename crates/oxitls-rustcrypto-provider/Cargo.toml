@@ -30,7 +30,11 @@ ed25519-dalek = { version = "2", default-features = false, features = ["pkcs8"] 
 hmac = { version = "0.12.1", default-features = false }
 p256 = { version = "0.13.2", default-features = false, features = ["pem", "ecdsa", "ecdh"] }
 p384 = { version = "0.13.0", default-features = false, features = ["pem", "ecdsa", "ecdh"] }
-paste = { version = "1.0.14", default-features = false }
+# `pastey` is the maintained successor to `paste`, which was archived
+# 2024-10-07 (RUSTSEC-2024-0436). Same macro surface: `use pastey::paste;`
+# and `paste! { .. }` are drop-in. Swapped so OxiMed can delete that
+# advisory ignore from its deny.toml once this is released.
+pastey = { version = "0.2.3", default-features = false }
 pkcs8 = { version = "0.10.2", default-features = false, features = ["pem", "pkcs5"] }
 pki-types = { package = "rustls-pki-types", version = "1.0.1", default-features = false }
 rand_core = { version = "0.6.4", default-features = false, features = ["getrandom"] }

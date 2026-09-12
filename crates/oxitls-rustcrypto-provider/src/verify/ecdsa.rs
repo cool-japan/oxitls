@@ -1,6 +1,6 @@
 use der::Decode;
 use digest::Digest;
-use paste::paste;
+use pastey::paste;
 use pki_types::alg_id;
 use pki_types::{AlgorithmIdentifier, InvalidSignature, SignatureVerificationAlgorithm};
 use signature::hazmat::PrehashVerifier;

@@ -2,7 +2,7 @@
 use alloc::boxed::Box;
 
 use crypto::{SharedSecret, SupportedKxGroup};
-use paste::paste;
+use pastey::paste;
 use rustls::crypto;
 
 #[derive(Debug)]
